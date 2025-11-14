@@ -329,8 +329,10 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
 
   local baseSpeed   = getCarSpeedKmh(car)
   local displaySpd  = math.abs(isKmh and baseSpeed or baseSpeed * KMH_TO_MPH)
-  local speedText   = string.format("%d", math.floor(displaySpd + 0.5))
-  local gearText    = formatGearText(car.gear)
+  local speedText   = string.format("%03d", math.floor(math.max(displaySpd, 0)))
+  local rawGear     = car.gear or 0
+  local gearText    = formatGearText(rawGear)
+  local transLabel  = (car.transmission and car.transmission.isAutomatic) and "AT" or "MT"
 
   local speedSize = panelHeight * 0.60
   local speedW    = ui.measureDWriteText(speedText, speedSize).x
@@ -365,15 +367,15 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
     rgbm(1, 1, 1, 0.12)
   )
 
-  local gearSize = panelHeight * 0.55
+  local gearSize = panelHeight * 0.48
   local gearW    = ui.measureDWriteText(gearText, gearSize).x
   local gearPos  = vec2(
     gearBoxMin.x + (gearRectWidth - gearW) * 0.5,
-    gearBoxMin.y + panelHeight * 0.35
+    gearBoxMin.y + panelHeight * 0.42
   )
   ui.dwriteDrawText(gearText, gearSize, gearPos, rgbm(0.92, 0.98, 1.0, 0.95))
 
-  local mtText = "MT"
+  local mtText = transLabel
   local mtSize = panelHeight * 0.32
   local mtW    = ui.measureDWriteText(mtText, mtSize).x
   local mtPos  = vec2(
