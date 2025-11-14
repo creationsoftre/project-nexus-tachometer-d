@@ -839,6 +839,10 @@ function acShutdown()
 end
 
 local theme = getConfigNumber("theme", 6)
+if type(theme) ~= "number" then
+  theme = 6
+end
+theme = math.max(3, math.min(7, theme))
 local scale = getConfigNumber("scale", 100.0) / 100.0
 local unit_kmh = getConfigBool("unit_kmh", true)
 local show_drift = getConfigBool("show_drift", true)
