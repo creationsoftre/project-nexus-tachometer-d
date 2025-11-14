@@ -91,20 +91,20 @@ local function formatGearText(gear)
 end
 
 local theme = {
-  revWarn        = 0.88,
-  bgOuter        = rgbm(0.08, 0.10, 0.15, 0.90),
-  bgInner        = rgbm(0.02, 0.04, 0.07, 0.92),
-  arcBase        = rgbm(0.18, 0.21, 0.26, 0.95),
-  arcFill        = rgbm(0.12, 0.65, 1.00, 0.95),
-  arcRed         = rgbm(1.00, 0.35, 0.30, 1.0),
-  chrome         = rgbm(0.95, 0.96, 1.00, 1.0),
-  label          = rgbm(0.84, 0.88, 0.95, 0.95),
-  digital        = rgbm(0.55, 1.00, 1.00, 1.0),
-  glassTop       = rgbm(0.05, 0.40, 0.55, 0.55),
-  glassBottom    = rgbm(0.00, 0.15, 0.25, 0.85),
-  glow           = rgbm(0.05, 0.65, 0.95, 0.55),
-  shadow         = rgbm(0, 0, 0, 0.55),
-  clusterStroke  = rgbm(0.65, 0.95, 1.0, 0.9)
+  revWarn        = 0.80,
+  bgOuter        = rgbm(0.02, 0.02, 0.02, 1.0),
+  bgInner        = rgbm(0.01, 0.01, 0.01, 1.0),
+  arcBase        = rgbm(0.95, 0.95, 0.95, 1.0),
+  arcFill        = rgbm(0.95, 0.95, 0.95, 1.0),
+  arcRed         = rgbm(1.00, 0.25, 0.20, 1.0),
+  chrome         = rgbm(0.98, 0.98, 0.98, 1.0),
+  label          = rgbm(0.95, 0.95, 0.95, 1.0),
+  digital        = rgbm(0.15, 0.85, 0.95, 1.0),
+  glassTop       = rgbm(0.20, 0.85, 0.95, 0.7),
+  glassBottom    = rgbm(0.00, 0.25, 0.30, 0.95),
+  glow           = rgbm(0.35, 0.60, 0.95, 0.5),
+  shadow         = rgbm(0, 0, 0, 0.75),
+  clusterStroke  = rgbm(0, 0, 0, 1.0)
 }
 
 local function getTheme()
@@ -283,89 +283,87 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   local rpmPos   = vec2(center.x - rpmWidth / 2, center.y - radius * 0.55)
   ui.dwriteDrawText(rpmLabel, rpmSize, rpmPos, rgbm(0.9, 0.95, 1.0, 0.9))
 
+  local brandText = "Initial D"
+  local brandSize = radius * 0.11
+  local brandWidth = ui.measureDWriteText(brandText, brandSize).x
+  local brandPos = vec2(center.x - brandWidth / 2, center.y - radius * 0.35)
+  ui.dwriteDrawText(brandText, brandSize, brandPos, rgbm(0.9, 0.9, 0.9, 0.9))
+
   --------------------------------------------------------
-  -- Digital speed / gear cluster (no logos)
+  -- Digital speed / gear cluster
   --------------------------------------------------------
-  local clusterW   = radius * 1.00
-  local clusterH   = radius * 0.36
-  local clusterY   = center.y + radius * 0.32
+  local clusterW   = radius * 0.95
+  local clusterH   = radius * 0.34
+  local clusterY   = center.y + radius * 0.28
   local clusterMin = vec2(center.x - clusterW / 2, clusterY)
   local clusterMax = clusterMin + vec2(clusterW, clusterH)
 
-  -- outer bezel + drop shadow
-  ui.drawRectFilled(clusterMin + vec2(4, 6), clusterMax + vec2(4, 6), rgbm(0, 0, 0, 0.45))
-  ui.drawRectFilled(clusterMin, clusterMax, rgbm(0, 0, 0, 0.8))
+  ui.drawRectFilled(clusterMin + vec2(3, 6), clusterMax + vec2(3, 6), rgbm(0, 0, 0, 0.6))
+  ui.drawRectFilled(clusterMin, clusterMax, rgbm(0, 0, 0, 0.95))
 
-  -- inner glass cyan gradient
-  local innerMin = clusterMin + vec2(4, 4)
-  local innerMax = clusterMax - vec2(4, 4)
+  local lcdMin = clusterMin + vec2(6, 6)
+  local lcdSplit = lcdMin.x + (clusterW * 0.62)
+  local lcdMax = vec2(lcdSplit - 6, clusterMax.y - 6)
+
   ui.drawRectFilledMultiColor(
-    innerMin, innerMax,
-    rgbm(0.15, 0.9, 0.95, 0.4),
-    rgbm(0.2, 1.0, 1.0, 0.6),
-    rgbm(0.0, 0.25, 0.3, 0.95),
-    rgbm(0.0, 0.2, 0.28, 0.92)
+    lcdMin, lcdMax,
+    rgbm(0.15, 0.85, 0.95, 0.65),
+    rgbm(0.20, 1.00, 1.00, 0.85),
+    rgbm(0.00, 0.30, 0.40, 0.95),
+    rgbm(0.00, 0.25, 0.35, 0.92)
   )
-
-  ui.drawRect(innerMin, innerMax, rgbm(0.1, 0.8, 0.9, 0.5), 1.8)
-  ui.drawRect(clusterMin, clusterMax, rgbm(0, 0, 0, 0.9), 2.0)
+  ui.drawRect(lcdMin, lcdMax, rgbm(0, 0, 0, 0.9), 2.2)
 
   local baseSpeed   = getCarSpeedKmh(car)
   local displaySpd  = math.abs(isKmh and baseSpeed or baseSpeed * KMH_TO_MPH)
   local speedText   = string.format("%d", math.floor(displaySpd + 0.5))
   local gearText    = formatGearText(car.gear)
 
-  -- speed digits (left)
   local speedSize = radius * 0.26
   local speedW    = ui.measureDWriteText(speedText, speedSize).x
   local speedPos  = vec2(
-    clusterMin.x + clusterW * 0.30 - speedW / 2,
-    clusterMin.y + clusterH * 0.18
+    lcdMin.x + (lcdMax.x - lcdMin.x) * 0.35 - speedW / 2,
+    lcdMin.y + radius * 0.02
   )
-  ui.dwriteDrawText(speedText, speedSize, speedPos, t.digital)
+  ui.dwriteDrawText(speedText, speedSize, speedPos, rgbm(0.90, 0.98, 1.0, 0.95))
 
-  -- km/h / mph text
   local unitText  = isKmh and "km/h" or "mph"
-  local unitSize  = radius * 0.11
+  local unitSize  = radius * 0.12
   local unitW     = ui.measureDWriteText(unitText, unitSize).x
   local unitPos   = vec2(
-    clusterMin.x + clusterW * 0.32 - unitW / 2,
-    clusterMin.y + clusterH * 0.60
+    lcdMin.x + (lcdMax.x - lcdMin.x) * 0.70 - unitW / 2,
+    lcdMax.y - unitSize * 1.1
   )
   ui.dwriteDrawText(unitText, unitSize, unitPos, rgbm(0.92, 0.98, 1.0, 0.95))
 
-  -- gear / MT box (right)
-  local gearBoxW   = clusterW * 0.22
-  local gearBoxH   = clusterH * 0.72
-  local gearBoxMin = vec2(clusterMin.x + clusterW * 0.66, clusterMin.y + clusterH * 0.14)
-  local gearBoxMax = gearBoxMin + vec2(gearBoxW, gearBoxH)
-
-  ui.drawRectFilled(gearBoxMin + vec2(2, 4), gearBoxMax + vec2(6, 8), rgbm(0, 0, 0, 0.35))
-  ui.drawRectFilled(gearBoxMin, gearBoxMax, rgbm(0, 0, 0, 0.55))
+  local gearBoxMin = vec2(lcdSplit, lcdMin.y)
+  local gearBoxMax = vec2(clusterMax.x - 6, lcdMax.y)
+  ui.drawRectFilled(gearBoxMin + vec2(2, 4), gearBoxMax + vec2(4, 6), rgbm(0, 0, 0, 0.4))
+  ui.drawRectFilled(gearBoxMin, gearBoxMax, rgbm(0, 0, 0, 0.85))
   ui.drawRectFilledMultiColor(
     gearBoxMin + vec2(3, 3),
     gearBoxMax - vec2(3, 3),
-    rgbm(0.25, 0.85, 1.0, 0.55),
-    rgbm(0.35, 1.00, 1.0, 0.95),
-    rgbm(0.00, 0.45, 0.65, 0.92),
-    rgbm(0.00, 0.30, 0.45, 0.85)
+    rgbm(0.15, 0.85, 0.95, 0.65),
+    rgbm(0.25, 1.0, 1.0, 0.85),
+    rgbm(0.00, 0.30, 0.45, 0.95),
+    rgbm(0.00, 0.20, 0.35, 0.92)
   )
-  ui.drawRect(gearBoxMin, gearBoxMax, rgbm(1, 1, 1, 0.25), 1.3)
+  ui.drawRect(gearBoxMin, gearBoxMax, rgbm(0, 0, 0, 1.0), 2.0)
 
-  local gearSize = radius * 0.24
+  local gearSize = radius * 0.22
   local gearW    = ui.measureDWriteText(gearText, gearSize).x
   local gearPos  = vec2(
-    gearBoxMin.x + gearBoxW / 2 - gearW / 2,
-    gearBoxMin.y + gearBoxH / 2 - gearSize * 0.55
+    gearBoxMin.x + (gearBoxMax.x - gearBoxMin.x) / 2 - gearW / 2,
+    gearBoxMin.y + radius * 0.04
   )
-  ui.dwriteDrawText(gearText, gearSize, gearPos, t.digital)
+  ui.dwriteDrawText(gearText, gearSize * 1.05, gearPos, rgbm(0.92, 0.98, 1.0, 0.95))
 
   local mtText = "MT"
   local mtSize = radius * 0.13
   local mtW    = ui.measureDWriteText(mtText, mtSize).x
   local mtPos  = vec2(
-    gearBoxMin.x + gearBoxW / 2 - mtW / 2,
-    gearBoxMin.y + gearBoxH / 2 + mtSize * 0.05
+    gearBoxMin.x + (gearBoxMax.x - gearBoxMin.x) / 2 - mtW / 2,
+    gearBoxMin.y + (gearBoxMax.y - gearBoxMin.y) * 0.55
   )
   ui.dwriteDrawText(mtText, mtSize, mtPos, rgbm(0.92, 0.98, 1.0, 0.9))
 
