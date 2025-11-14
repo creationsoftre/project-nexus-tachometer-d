@@ -61,16 +61,20 @@ local function formatGearText(gear)
 end
 
 local theme = {
-  revWarn = 0.88,
-  bgOuter = rgbm(0.08, 0.08, 0.10, 1.0),
-  bgInner = rgbm(0.02, 0.02, 0.04, 1.0),
-  arcBase = rgbm(0.16, 0.16, 0.20, 1.0),
-  arcFill = rgbm(0.30, 0.75, 1.00, 0.95),
-  arcRed  = rgbm(1.00, 0.30, 0.20, 1.0),
-  chrome  = rgbm(0.92, 0.92, 0.95, 1.0),
-  label   = rgbm(0.80, 0.85, 0.92, 0.95),
-  digital = rgbm(0.35, 0.95, 1.00, 1.0),
-  bgOuterHighlight = rgbm(0, 0, 0, 1)
+  revWarn        = 0.88,
+  bgOuter        = rgbm(0.08, 0.10, 0.15, 0.90),
+  bgInner        = rgbm(0.02, 0.04, 0.07, 0.92),
+  arcBase        = rgbm(0.18, 0.21, 0.26, 0.95),
+  arcFill        = rgbm(0.12, 0.65, 1.00, 0.95),
+  arcRed         = rgbm(1.00, 0.35, 0.30, 1.0),
+  chrome         = rgbm(0.95, 0.96, 1.00, 1.0),
+  label          = rgbm(0.84, 0.88, 0.95, 0.95),
+  digital        = rgbm(0.55, 1.00, 1.00, 1.0),
+  glassTop       = rgbm(0.05, 0.40, 0.55, 0.55),
+  glassBottom    = rgbm(0.00, 0.15, 0.25, 0.85),
+  glow           = rgbm(0.05, 0.65, 0.95, 0.55),
+  shadow         = rgbm(0, 0, 0, 0.55),
+  clusterStroke  = rgbm(0.65, 0.95, 1.0, 0.9)
 }
 
 local function getTheme()
@@ -85,22 +89,32 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   local rpmFraction = clamp(rpm / (maxRpm * 1.05), 0, 1)
 
   --------------------------------------------------------
-  -- Background disc (like reference)
+  -- Background disc with shadow + subtle gradient
   --------------------------------------------------------
   local outerR = radius * 1.05
   local innerR = radius * 0.72
+  local dropShadowOffset = vec2(0, radius * 0.15)
 
-  -- outer and inner discs
+  ui.drawCircleFilled(center + dropShadowOffset, radius * 1.18, rgbm(0, 0, 0, 0.35))
+  ui.drawCircleFilled(center, radius * 1.12, rgbm(0, 0, 0, 0.25))
+
   ui.drawCircleFilled(center, outerR, t.bgOuter)
+  ui.drawCircleFilled(center, outerR * 0.94, rgbm(t.bgOuter.r, t.bgOuter.g, t.bgOuter.b, 0.65))
+
+  ui.drawCircleFilled(center, innerR * 1.05, rgbm(0, 0, 0, 0.35))
   ui.drawCircleFilled(center, innerR, t.bgInner)
+  ui.drawCircleFilled(center, innerR * 0.85, rgbm(0.01, 0.01, 0.02, 0.65))
 
   -- subtle outer ring
-  ui.drawCircle(center, outerR, rgbm(0, 0, 0, 1), 2.0)
+  ui.drawCircle(center, outerR, rgbm(0.15, 0.20, 0.28, 0.8), 2.0)
+  ui.drawCircle(center, outerR * 0.98, rgbm(0.8, 0.9, 1.0, 0.08), 1.4)
 
   -- centre cap
   local hubR = radius * 0.10
-  ui.drawCircleFilled(center, hubR, rgbm(0, 0, 0, 1))
-  ui.drawCircle(center, hubR, rgbm(0.18, 0.18, 0.18, 1.0), 2.0)
+  ui.drawCircleFilled(center, hubR * 2.4, rgbm(0, 0, 0, 0.35))
+  ui.drawCircleFilled(center, hubR, rgbm(0.08, 0.08, 0.10, 0.9))
+  ui.drawCircleFilled(center, hubR * 0.65, rgbm(0.05, 0.05, 0.07, 1.0))
+  ui.drawCircle(center, hubR, rgbm(0.35, 0.35, 0.4, 0.6), 2.2)
 
   --------------------------------------------------------
   -- Main tachometer arc + red block overlay
@@ -115,6 +129,9 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   ui.pathArcTo(center, arcOuter, startA, endA, 128)
   ui.pathArcTo(center, arcInner, endA, startA, 128)
   ui.pathStroke(t.arcBase, true, 1.0)
+  ui.pathClear()
+  ui.pathArcTo(center, arcOuter * 1.02, startA, endA, 96)
+  ui.pathStroke(t.glow, false, 4.5)
 
   -- filled arc up to warning
   local warnFrac = t.revWarn or 0.90
@@ -245,7 +262,7 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   local rpmSize  = radius * 0.13
   local rpmWidth = ui.measureDWriteText(rpmLabel, rpmSize).x
   local rpmPos   = vec2(center.x - rpmWidth / 2, center.y - radius * 0.55)
-  ui.dwriteDrawText(rpmLabel, rpmSize, rpmPos, t.label)
+  ui.dwriteDrawText(rpmLabel, rpmSize, rpmPos, rgbm(0.9, 0.95, 1.0, 0.9))
 
   --------------------------------------------------------
   -- Digital speed / gear cluster (no logos)
@@ -256,22 +273,29 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   local clusterMin = vec2(center.x - clusterW / 2, clusterY)
   local clusterMax = clusterMin + vec2(clusterW, clusterH)
 
-  -- outer bezel
-  ui.drawRectFilled(clusterMin, clusterMax, rgbm(0, 0, 0, 0.95))
+  -- outer bezel + drop shadow
+  ui.drawRectFilled(clusterMin + vec2(4, 6), clusterMax + vec2(4, 6), rgbm(0, 0, 0, 0.35))
+  ui.drawRectFilled(clusterMin, clusterMax, rgbm(0, 0, 0, 0.45))
 
   -- inner glass cyan gradient
-  local innerMin = clusterMin + vec2(2, 2)
-  local innerMax = clusterMax - vec2(2, 2)
+  local innerMin = clusterMin + vec2(4, 4)
+  local innerMax = clusterMax - vec2(4, 4)
   ui.drawRectFilledMultiColor(
     innerMin, innerMax,
-    rgbm(t.digital.r, t.digital.g, t.digital.b, 0.35), -- TL
-    rgbm(t.digital.r, t.digital.g, t.digital.b, 0.55), -- TR
-    rgbm(0.00,        0.35,          0.35,        0.90), -- BR
-    rgbm(0.00,        0.25,          0.30,        0.85)  -- BL
+    t.glassTop,
+    rgbm(t.glassTop.r, t.glassTop.g, t.glassTop.b, 0.65),
+    t.glassBottom,
+    rgbm(t.glassBottom.r, t.glassBottom.g, t.glassBottom.b, 0.95)
   )
 
-  ui.drawRect(innerMin, innerMax, rgbm(t.digital.r, t.digital.g, t.digital.b, 0.9), 1.5)
-  ui.drawRect(clusterMin, clusterMax, rgbm(0, 0, 0, 0.8))
+  ui.drawRect(innerMin, innerMax, rgbm(1, 1, 1, 0.12), 1.2)
+  ui.drawRect(clusterMin, clusterMax, rgbm(0.7, 0.9, 1.0, 0.25))
+  ui.drawLine(
+    vec2(innerMin.x + 6, innerMin.y + 6),
+    vec2(innerMax.x - 6, innerMin.y + 6),
+    rgbm(1, 1, 1, 0.15),
+    1.0
+  )
 
   local baseSpeed   = getCarSpeedKmh(car)
   local displaySpd  = math.abs(isKmh and baseSpeed or baseSpeed * KMH_TO_MPH)
@@ -295,7 +319,7 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
     clusterMin.x + clusterW * 0.32 - unitW / 2,
     clusterMin.y + clusterH * 0.60
   )
-  ui.dwriteDrawText(unitText, unitSize, unitPos, t.label)
+  ui.dwriteDrawText(unitText, unitSize, unitPos, rgbm(0.92, 0.98, 1.0, 0.95))
 
   -- gear / MT box (right)
   local gearBoxW   = clusterW * 0.24
@@ -303,16 +327,17 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   local gearBoxMin = vec2(clusterMin.x + clusterW * 0.68, clusterMin.y + clusterH * 0.15)
   local gearBoxMax = gearBoxMin + vec2(gearBoxW, gearBoxH)
 
-  ui.drawRectFilled(gearBoxMin, gearBoxMax, rgbm(0, 0, 0, 0.95))
+  ui.drawRectFilled(gearBoxMin + vec2(2, 4), gearBoxMax + vec2(6, 8), rgbm(0, 0, 0, 0.35))
+  ui.drawRectFilled(gearBoxMin, gearBoxMax, rgbm(0, 0, 0, 0.55))
   ui.drawRectFilledMultiColor(
-    gearBoxMin + vec2(2, 2),
-    gearBoxMax - vec2(2, 2),
-    rgbm(t.digital.r, t.digital.g, t.digital.b, 0.35),
-    rgbm(t.digital.r, t.digital.g, t.digital.b, 0.45),
-    rgbm(0.00,        0.35,          0.35,        0.85),
-    rgbm(0.00,        0.25,          0.30,        0.80)
+    gearBoxMin + vec2(3, 3),
+    gearBoxMax - vec2(3, 3),
+    rgbm(0.25, 0.85, 1.0, 0.55),
+    rgbm(0.35, 1.00, 1.0, 0.95),
+    rgbm(0.00, 0.45, 0.65, 0.92),
+    rgbm(0.00, 0.30, 0.45, 0.85)
   )
-  ui.drawRect(gearBoxMin, gearBoxMax, rgbm(t.digital.r, t.digital.g, t.digital.b, 0.9), 1.4)
+  ui.drawRect(gearBoxMin, gearBoxMax, rgbm(1, 1, 1, 0.25), 1.3)
 
   local gearSize = radius * 0.24
   local gearW    = ui.measureDWriteText(gearText, gearSize).x
@@ -329,7 +354,7 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
     gearBoxMin.x + gearBoxW / 2 - mtW / 2,
     gearBoxMin.y + gearBoxH / 2 + mtSize * 0.05
   )
-  ui.dwriteDrawText(mtText, mtSize, mtPos, t.label)
+  ui.dwriteDrawText(mtText, mtSize, mtPos, rgbm(0.92, 0.98, 1.0, 0.9))
 
   --------------------------------------------------------
   -- Accel / Brake mini gauge (right disc, GRADIENT)
@@ -337,8 +362,11 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   local subR      = radius * 0.55
   local subCenter = vec2(center.x + radius * 1.10, center.y + radius * 0.08)
 
-  ui.drawCircleFilled(subCenter, subR, t.bgOuter)
-  ui.drawCircleFilled(subCenter, subR * 0.78, t.bgInner)
+  ui.drawCircleFilled(subCenter + vec2(0, subR * 0.12), subR * 1.05, rgbm(0, 0, 0, 0.35))
+  ui.drawCircleFilled(subCenter, subR, rgbm(t.bgOuter.r, t.bgOuter.g, t.bgOuter.b, 0.85))
+  ui.drawCircleFilled(subCenter, subR * 0.85, rgbm(0.03, 0.05, 0.08, 0.8))
+  ui.drawCircleFilled(subCenter, subR * 0.70, rgbm(0.01, 0.02, 0.04, 0.95))
+  ui.drawCircle(subCenter, subR * 0.95, rgbm(0.6, 0.9, 1.0, 0.35), 1.8)
 
   local accel = clamp(car.gas or car.throttle or 0.0, 0.0, 1.0)
   local brake = clamp(car.brake or 0.0, 0.0, 1.0)
@@ -416,10 +444,10 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   local pSize = radius * 0.11
   ui.dwriteDrawText("ACCEL", pSize,
     vec2(subCenter.x + subR * 0.05, subCenter.y - subR * 0.25),
-    t.label)
+    rgbm(0.85, 0.96, 1.0, 0.95))
   ui.dwriteDrawText("BRAKE", pSize,
     vec2(subCenter.x + subR * 0.05, subCenter.y),
-    t.label)
+    rgbm(0.95, 0.85, 0.85, 0.95))
 end
 
 local function ensureHudPosition(winSize)
