@@ -119,28 +119,34 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   local rpmFraction = clamp(rpm / (maxRpm * 1.05), 0, 1)
 
   --------------------------------------------------------
-  -- Background disc (transparent)
+  -- Background disc with gradients and glow
   --------------------------------------------------------
   local outerR = radius * 1.05
   local innerR = radius * 0.72
-  ui.drawCircleFilled(center, outerR, t.bgOuter)
-  ui.drawCircleFilled(center, outerR * 0.97, rgbm(t.bgOuter.r, t.bgOuter.g, t.bgOuter.b, 0.8))
-  ui.drawCircle(center, outerR * 0.93, rgbm(0.2, 0.35, 0.45, 0.35), radius * 0.015)
+  local dropOffset = vec2(0, radius * 0.14)
+  ui.drawCircleFilled(center + dropOffset, outerR * 1.05, rgbm(0, 0, 0, 0.35))
 
-  ui.drawCircleFilled(center, innerR * 1.05, rgbm(0, 0, 0, 0.35))
-  ui.drawCircleFilled(center, innerR, t.bgInner)
-  ui.drawCircleFilled(center, innerR * 0.85, rgbm(0.01, 0.01, 0.02, 0.65))
+  ui.drawCircleFilled(center, outerR, rgbm(0.01, 0.01, 0.01, 1.0))
+  ui.drawCircleFilled(center, outerR * 0.98, rgbm(0.05, 0.05, 0.05, 1.0))
+  ui.drawCircleFilled(center, outerR * 0.90, rgbm(0.08, 0.08, 0.08, 1.0))
 
-  -- subtle outer ring
-  ui.drawCircle(center, outerR, rgbm(0.15, 0.20, 0.28, 0.8), 2.0)
-  ui.drawCircle(center, outerR * 0.98, rgbm(0.8, 0.9, 1.0, 0.08), 1.4)
+  ui.pathClear()
+  ui.pathArcTo(center, outerR * 0.96, math.rad(-150), math.rad(60), 64)
+  ui.pathStroke(rgbm(1, 1, 1, 0.10), false, radius * 0.04)
+
+  ui.drawCircle(center, outerR * 0.98, rgbm(0.6, 0.85, 1.0, 0.12), radius * 0.015)
+  ui.drawCircle(center, outerR * 0.94, rgbm(0, 0, 0, 0.9), radius * 0.02)
+
+  ui.drawCircleFilled(center, innerR * 1.03, rgbm(0, 0, 0, 0.65))
+  ui.drawCircleFilled(center, innerR, rgbm(0.02, 0.02, 0.02, 1.0))
+  ui.drawCircleFilled(center, innerR * 0.82, rgbm(0.0, 0.0, 0.0, 0.7))
+  ui.drawCircle(center, innerR * 0.88, rgbm(1, 1, 1, 0.06), radius * 0.012)
 
   -- centre cap
-  local hubR = radius * 0.10
-  ui.drawCircleFilled(center, hubR * 2.4, rgbm(0, 0, 0, 0.35))
-  ui.drawCircleFilled(center, hubR, rgbm(0.08, 0.08, 0.10, 0.9))
-  ui.drawCircleFilled(center, hubR * 0.65, rgbm(0.05, 0.05, 0.07, 1.0))
-  ui.drawCircle(center, hubR, rgbm(0.35, 0.35, 0.4, 0.6), 2.2)
+  local hubR = radius * 0.12
+  ui.drawCircleFilled(center, hubR * 1.3, rgbm(0, 0, 0, 0.8))
+  ui.drawCircleFilled(center, hubR * 0.85, rgbm(0.05, 0.05, 0.05, 1.0))
+  ui.drawCircle(center, hubR * 0.85, rgbm(0.8, 0.1, 0.1, 0.2), radius * 0.01)
 
   --------------------------------------------------------
   -- Main tachometer arc + red block overlay
@@ -275,35 +281,51 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   local function drawRoundedRectFilled(minPt, maxPt, radius, color)
     local r = math.max(0, math.min(radius, (maxPt.x - minPt.x) * 0.5, (maxPt.y - minPt.y) * 0.5))
     ui.pathClear()
-    ui.pathArcTo(vec2(maxPt.x - r, maxPt.y - r), r, 0, math.pi / 2, 12)
-    ui.pathArcTo(vec2(minPt.x + r, maxPt.y - r), r, math.pi / 2, math.pi, 12)
-    ui.pathArcTo(vec2(minPt.x + r, minPt.y + r), r, math.pi, math.pi * 1.5, 12)
-    ui.pathArcTo(vec2(maxPt.x - r, minPt.y + r), r, math.pi * 1.5, math.pi * 2, 12)
+    ui.pathArcTo(vec2(maxPt.x - r, maxPt.y - r), r, 0, math.pi / 2, 16)
+    ui.pathArcTo(vec2(minPt.x + r, maxPt.y - r), r, math.pi / 2, math.pi, 16)
+    ui.pathArcTo(vec2(minPt.x + r, minPt.y + r), r, math.pi, math.pi * 1.5, 16)
+    ui.pathArcTo(vec2(maxPt.x - r, minPt.y + r), r, math.pi * 1.5, math.pi * 2, 16)
     ui.pathFillConvex(color)
   end
 
   local function strokeRoundedRect(minPt, maxPt, radius, color, thickness)
     local r = math.max(0, math.min(radius, (maxPt.x - minPt.x) * 0.5, (maxPt.y - minPt.y) * 0.5))
     ui.pathClear()
-    ui.pathArcTo(vec2(maxPt.x - r, maxPt.y - r), r, 0, math.pi / 2, 12)
-    ui.pathArcTo(vec2(minPt.x + r, maxPt.y - r), r, math.pi / 2, math.pi, 12)
-    ui.pathArcTo(vec2(minPt.x + r, minPt.y + r), r, math.pi, math.pi * 1.5, 12)
-    ui.pathArcTo(vec2(maxPt.x - r, minPt.y + r), r, math.pi * 1.5, math.pi * 2, 12)
+    ui.pathArcTo(vec2(maxPt.x - r, maxPt.y - r), r, 0, math.pi / 2, 16)
+    ui.pathArcTo(vec2(minPt.x + r, maxPt.y - r), r, math.pi / 2, math.pi, 16)
+    ui.pathArcTo(vec2(minPt.x + r, minPt.y + r), r, math.pi, math.pi * 1.5, 16)
+    ui.pathArcTo(vec2(maxPt.x - r, minPt.y + r), r, math.pi * 1.5, math.pi * 2, 16)
     ui.pathStroke(color, true, thickness)
   end
 
-  local totalWidth   = radius * 1.12
-  local mainWidth    = totalWidth * 0.72
+  local function drawGloss(minPt, maxPt, color)
+    ui.drawRectFilledMultiColor(
+      minPt, maxPt,
+      color,
+      color,
+      rgbm(color.r, color.g, color.b, 0),
+      rgbm(color.r, color.g, color.b, 0)
+    )
+  end
+
+  local totalWidth   = radius * 1.20
+  local mainWidth    = totalWidth * 0.76
   local gearWidth    = totalWidth - mainWidth
-  local gap          = radius * 0.04
-  local panelHeight  = radius * 0.25
+  local gap          = radius * 0.02
+  local panelHeight  = radius * 0.24
   local baseMinX     = center.x - (totalWidth + gap) * 0.5
-  local panelY       = center.y + radius * 0.38
+  local panelY       = center.y + radius * 0.40
 
   local lcdMin = vec2(baseMinX, panelY)
   local lcdMax = vec2(lcdMin.x + mainWidth, panelY + panelHeight)
-  drawRoundedRectFilled(lcdMin, lcdMax, panelHeight * 0.45, rgbm(0.12, 0.80, 0.90, 0.9))
-  strokeRoundedRect(lcdMin, lcdMax, panelHeight * 0.45, rgbm(0, 0, 0, 1.0), 2.3)
+  drawRoundedRectFilled(lcdMin, lcdMax, panelHeight * 0.42, rgbm(0.04, 0.15, 0.17, 0.95))
+  drawRoundedRectFilled(lcdMin + vec2(panelHeight * 0.04, panelHeight * 0.04), lcdMax - vec2(panelHeight * 0.04, panelHeight * 0.04), panelHeight * 0.34, rgbm(0.10, 0.65, 0.70, 0.9))
+  strokeRoundedRect(lcdMin, lcdMax, panelHeight * 0.42, rgbm(0, 0, 0, 1.0), 2.4)
+  drawGloss(
+    vec2(lcdMin.x + panelHeight * 0.12, lcdMin.y + panelHeight * 0.07),
+    vec2(lcdMax.x - panelHeight * 0.12, lcdMin.y + panelHeight * 0.18),
+    rgbm(1, 1, 1, 0.12)
+  )
 
   local baseSpeed   = getCarSpeedKmh(car)
   local displaySpd  = math.abs(isKmh and baseSpeed or baseSpeed * KMH_TO_MPH)
@@ -331,8 +353,17 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   local gearBoxMax = vec2(gearBoxMin.x + gearWidth - gap, lcdMin.y + panelHeight)
   local gearRectWidth = gearBoxMax.x - gearBoxMin.x
 
-  drawRoundedRectFilled(gearBoxMin, gearBoxMax, panelHeight * 0.40, rgbm(0.12, 0.80, 0.90, 0.9))
-  strokeRoundedRect(gearBoxMin, gearBoxMax, panelHeight * 0.40, rgbm(0, 0, 0, 1.0), 2.0)
+  drawRoundedRectFilled(gearBoxMin, gearBoxMax, panelHeight * 0.38, rgbm(0.04, 0.15, 0.17, 0.95))
+  drawRoundedRectFilled(gearBoxMin + vec2(panelHeight * 0.035, panelHeight * 0.035),
+                        gearBoxMax - vec2(panelHeight * 0.035, panelHeight * 0.035),
+                        panelHeight * 0.30,
+                        rgbm(0.13, 0.70, 0.75, 0.9))
+  strokeRoundedRect(gearBoxMin, gearBoxMax, panelHeight * 0.38, rgbm(0, 0, 0, 1.0), 2.0)
+  drawGloss(
+    vec2(gearBoxMin.x + panelHeight * 0.08, gearBoxMin.y + panelHeight * 0.07),
+    vec2(gearBoxMax.x - panelHeight * 0.08, gearBoxMin.y + panelHeight * 0.18),
+    rgbm(1, 1, 1, 0.12)
+  )
 
   local gearSize = panelHeight * 0.55
   local gearW    = ui.measureDWriteText(gearText, gearSize).x
