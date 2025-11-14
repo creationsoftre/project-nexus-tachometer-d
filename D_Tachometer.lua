@@ -339,3 +339,4 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   ui.dwriteDrawText("BRAKE", pSize,
     vec2(subCenter.x + subR * 0.05, subCenter.y),
     t.label)
+end
