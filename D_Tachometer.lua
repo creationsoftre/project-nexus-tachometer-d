@@ -19,17 +19,33 @@ end
 
 local isKmh = true
 
+local function trySimField(sim, field)
+  local ok, value = pcall(function()
+    return sim[field]
+  end)
+  if ok then return value end
+end
+
 local function updateUnitPreference()
   if not ac or not ac.getSim then return end
   local sim = ac.getSim()
   if not sim then return end
 
-  if sim.isInKilometers ~= nil then
-    isKmh = sim.isInKilometers
-  elseif sim.isMetric ~= nil then
-    isKmh = sim.isMetric
-  elseif sim.isMPH ~= nil then
-    isKmh = not sim.isMPH
+  local km = trySimField(sim, 'isInKilometers')
+  if km ~= nil then
+    isKmh = km
+    return
+  end
+
+  local metric = trySimField(sim, 'isMetric')
+  if metric ~= nil then
+    isKmh = metric
+    return
+  end
+
+  local mph = trySimField(sim, 'isMPH')
+  if mph ~= nil then
+    isKmh = not mph
   end
 end
 
