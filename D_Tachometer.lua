@@ -121,7 +121,7 @@ local function getGearText()
 end
 
 ------------------------------------------------------------
--- Small rounded pill helper using paths (for modern buttons)
+-- Rounded pill helper
 ------------------------------------------------------------
 
 local function drawPill(min, max, colFill, colBorder)
@@ -141,7 +141,7 @@ local function drawPill(min, max, colFill, colBorder)
 end
 
 ------------------------------------------------------------
--- Gauge drawing (modern Initial D cluster)
+-- Gauge drawing
 ------------------------------------------------------------
 
 local function drawInitialDStyleGauge(car, center, radius, dt)
@@ -151,38 +151,36 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   local rpmFraction = clamp(rpm / (maxRpm * 1.05), 0, 1)
 
   --------------------------------------------------------
-  -- Background disc with subtle “glass” gradient & glow
+  -- Background disc + soft glow
   --------------------------------------------------------
   local outerR = radius * 1.05
   local innerR = radius * 0.70
 
-  -- Outer soft glow ring
+  -- glow with filled circles (no drawCircleStroke)
   for i = 1, 3 do
     local r = outerR + i * 4
     local a = 0.11 - i * 0.03
-    ui.drawCircleStroke(center, r, rgbm(t.arcFill.r, t.arcFill.g, t.arcFill.b, a), 2.0)
+    if a > 0 then
+      ui.drawCircleFilled(center, r, rgbm(t.arcFill.r, t.arcFill.g, t.arcFill.b, a))
+    end
   end
 
-  -- Outer dark ring
   ui.drawCircleFilled(center, outerR, t.bgOuter)
-  -- Inner disc
   ui.drawCircleFilled(center, innerR, t.bgInner)
 
   --------------------------------------------------------
-  -- Base arc (semi-circle) and filled RPM arc
+  -- Base arc & filled RPM arc
   --------------------------------------------------------
   local startA = math.rad(-210)
   local endA   = math.rad(  30)
   local arcOuter = radius * 0.98
   local arcInner = radius * 0.78
 
-  -- Base track
   ui.pathClear()
   ui.pathArcTo(center, arcOuter, startA, endA, 96)
   ui.pathArcTo(center, arcInner, endA, startA, 96)
   ui.pathStroke(t.arcBase, true, 1.0)
 
-  -- Filled main section (up to warning fraction)
   local warnFrac   = t.revWarn or 0.90
   local currentEnd = lerp(startA, endA, rpmFraction)
 
@@ -193,7 +191,6 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
     ui.pathArcTo(center, arcInner, fillEnd, startA, 64)
     ui.pathStroke(t.arcFill, true, 1.8)
 
-    -- Redline
     if rpmFraction > warnFrac then
       local redStart = lerp(startA, endA, warnFrac)
       local redEnd   = currentEnd
@@ -205,7 +202,7 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   end
 
   --------------------------------------------------------
-  -- Tick marks and RPM numbers (0–maxK)
+  -- Tick marks & RPM numbers
   --------------------------------------------------------
   local step = 1000
   local maxK = math.ceil(maxRpm / step)
@@ -227,7 +224,6 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
       (k % 2 == 0) and 2.2 or 1.3
     )
 
-    -- numeric labels for every 1000 rpm except 0
     if k > 0 then
       local labelR = arcOuter * 1.15
       local lx     = center.x + math.cos(a) * labelR
@@ -245,7 +241,7 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   end
 
   --------------------------------------------------------
-  -- Cluster: digital speed & gear in “rounded square”
+  -- Cluster: digital speed & gear
   --------------------------------------------------------
   local clusterW  = radius * 1.35
   local clusterH  = radius * 0.60
@@ -253,7 +249,6 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   local clusterMin = vec2(center.x - clusterW / 2, clusterY)
   local clusterMax = clusterMin + vec2(clusterW, clusterH)
 
-  -- layered rects for gradient-ish look
   ui.drawRectFilled(clusterMin, clusterMax, rgbm(0, 0, 0, 0.92))
   ui.drawRectFilled(
     clusterMin + vec2(2, 2),
@@ -262,7 +257,6 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   )
   ui.drawRect(clusterMin, clusterMax, rgbm(1, 1, 1, 0.25))
 
-  -- left: SPEED
   local spd       = getSpeed()
   local speedText = string.format("%d", spd)
   local gearText  = getGearText()
@@ -273,10 +267,8 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
     clusterMin.x + clusterW * 0.28 - speedW / 2,
     clusterMin.y + clusterH * 0.18
   )
-
   ui.dwriteDrawText(speedText, speedSize, speedPos, t.digital)
 
-  -- speed unit below
   local unitText  = isKmh and "km/h" or "mph"
   local unitSize  = radius * 0.14
   local unitW     = ui.measureDWriteText(unitText, unitSize).x
@@ -286,7 +278,6 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   )
   ui.dwriteDrawText(unitText, unitSize, unitPos, t.label)
 
-  -- right: gear + MT
   local gearSize = radius * 0.40
   local gearW    = ui.measureDWriteText(gearText, gearSize).x
   local gearPos  = vec2(
@@ -305,7 +296,7 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   ui.dwriteDrawText(mtText, mtSize, mtPos, t.label)
 
   --------------------------------------------------------
-  -- Odometer just below cluster
+  -- Odometer
   --------------------------------------------------------
   local dist = odometerKm
   if not isKmh then dist = dist * KM_TO_MI end
@@ -320,15 +311,14 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   ui.dwriteDrawText(odoText, odoSize, odoPos, t.label)
 
   --------------------------------------------------------
-  -- Rev warning “jewel”
+  -- Rev warning jewel
   --------------------------------------------------------
   if rpmFraction >= (t.revWarn or 0.9) then
     local lightR = radius * 0.06
     local lx     = center.x + radius * 0.60
     local ly     = center.y - radius * 0.35
     ui.drawCircleFilled(vec2(lx, ly), lightR, t.arcRed)
-    ui.drawCircleStroke(vec2(lx, ly), lightR + 2,
-      rgbm(1, 1, 1, 0.9), 1.2)
+    ui.drawCircleFilled(vec2(lx, ly), lightR - 3, rgbm(0,0,0,0.3))
 
     ui.dwriteDrawText("REV", radius * 0.12,
       vec2(lx - radius * 0.16, ly + lightR + 2),
@@ -336,7 +326,7 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   end
 
   --------------------------------------------------------
-  -- ABS / TC indicators under odo (compact, centered)
+  -- ABS / TC indicators
   --------------------------------------------------------
   local boxW  = radius * 0.33
   local boxH  = radius * 0.13
@@ -372,7 +362,7 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
 end
 
 ------------------------------------------------------------
--- Window controls (unit/theme buttons, drag handle)
+-- Window controls (KPH/MPH, theme, drag)
 ------------------------------------------------------------
 
 local function windowMain(dt, winSize)
@@ -385,15 +375,12 @@ local function windowMain(dt, winSize)
   local mouse     = ui.mousePos()
   local localPos  = vec2(mouse.x - winOrigin.x, mouse.y - winOrigin.y)
 
-  ------------------------------------------------------
-  -- KPH / MPH pill (top-left, rounded)
-  ------------------------------------------------------
+  -- KPH / MPH pill
   local pillMin = vec2(16, 12)
   local pillMax = pillMin + vec2(120, 26)
   drawPill(pillMin, pillMax, rgbm(0, 0, 0, 0.9), rgbm(1,1,1,0.8))
 
   local midX = (pillMin.x + pillMax.x) * 0.5
-
   local kmhMin = pillMin
   local kmhMax = vec2(midX, pillMax.y)
   local mphMin = vec2(midX, pillMin.y)
@@ -420,9 +407,7 @@ local function windowMain(dt, winSize)
     end
   end
 
-  ------------------------------------------------------
-  -- Theme selector pill (top-center)
-  ------------------------------------------------------
+  -- Theme selector pill
   local themeW   = 130
   local themeH   = 24
   local themeMin = vec2(winSize.x / 2 - themeW / 2, 14)
@@ -447,9 +432,7 @@ local function windowMain(dt, winSize)
     STORAGE_THEME.value = themeIndex
   end
 
-  ------------------------------------------------------
-  -- Drag handle (top-right) – rounded square with plus
-  ------------------------------------------------------
+  -- Drag handle (+)
   local dragSize = 24
   local dragMin  = vec2(winSize.x - dragSize - 16, 12)
   local dragMax  = dragMin + vec2(dragSize, dragSize)
@@ -486,9 +469,7 @@ local function windowMain(dt, winSize)
     end
   end
 
-  ------------------------------------------------------
   -- Main gauge
-  ------------------------------------------------------
   local center = vec2(winSize.x / 2, winSize.y / 2 + 10)
   drawInitialDStyleGauge(car, center, HUD_RADIUS * Scale, dt)
 end
@@ -506,7 +487,6 @@ function script.update(dt)
   gear       = car.gear
   odometerKm = car.distanceDrivenTotalKm or 0
 
-  -- adjust these fields if your CSP build uses different names
   absOn      = car.absInAction or car.absEnabled or false
   tcOn       = car.tcInAction  or car.tcEnabled  or false
 end
@@ -521,7 +501,6 @@ function script.drawUI(dt)
   local winSize = vec2(radius * 3.0, radius * 3.0)
 
   if not winPos then
-    -- default bottom-left like the arcade UIs
     winPos = vec2(60, full.y - winSize.y - 60)
   end
 
