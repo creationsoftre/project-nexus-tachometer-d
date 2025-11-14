@@ -25,7 +25,27 @@ local clamp = clamp or function(v, minV, maxV)
 end
 
 local function scalarLerp(a, b, t)
+  a = a or 0
+  b = b or 0
+  t = t or 0
   return a + (b - a) * t
+end
+
+do
+  local originalLerp = _G.lerp
+  local function fallbackLerp(a, b, t)
+    return scalarLerp(a, b, t)
+  end
+  if type(originalLerp) == "function" then
+    _G.lerp = function(a, b, t)
+      if a == nil or b == nil then
+        return fallbackLerp(a, b, t)
+      end
+      return originalLerp(a, b, t or 0)
+    end
+  else
+    _G.lerp = fallbackLerp
+  end
 end
 
 local function trySimField(sim, field)
