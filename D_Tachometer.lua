@@ -24,7 +24,7 @@ local clamp = clamp or function(v, minV, maxV)
   return v
 end
 
-local lerp = lerp or function(a, b, t)
+local function scalarLerp(a, b, t)
   return a + (b - a) * t
 end
 
@@ -148,7 +148,7 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   local warnFrac = t.revWarn or 0.90
   if rpmFraction > 0.0 then
     local safeFrac = math.min(rpmFraction, warnFrac)
-    local safeEndA = lerp(startA, endA, safeFrac)
+    local safeEndA = scalarLerp(startA, endA, safeFrac)
 
     ui.pathClear()
     ui.pathArcTo(center, arcOuter, startA, safeEndA, 96)
@@ -166,8 +166,8 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
         if segStartFrac >= maxFrac then break end
 
         local segEndFrac = math.min(segStartFrac + span * 0.80, maxFrac)
-        local segStartA  = lerp(startA, endA, segStartFrac)
-        local segEndA    = lerp(startA, endA, segEndFrac)
+        local segStartA  = scalarLerp(startA, endA, segStartFrac)
+        local segEndA    = scalarLerp(startA, endA, segEndFrac)
 
         if segEndA > segStartA then
           ui.pathClear()
@@ -185,7 +185,7 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   local maxK = 10
   for k = 0, maxK do
     local frac = k / maxK
-    local a    = lerp(startA, endA, frac)
+    local a    = scalarLerp(startA, endA, frac)
     local r1   = arcOuter * 0.94
     local r2   = arcOuter * ((k % 1 == 0) and 1.08 or 1.03)
 
@@ -220,7 +220,7 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   -- RPM needle (triangular pointer with glow)
   --------------------------------------------------------
   if rpmFraction > 0 then
-    local angle = lerp(startA, endA, rpmFraction)
+    local angle = scalarLerp(startA, endA, rpmFraction)
     local dirX = math.cos(angle)
     local dirY = math.sin(angle)
     local px   = -dirY
@@ -365,10 +365,10 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
 
       local function lerpColor(colA, colB, amount)
         return rgbm(
-          lerp(colA.r, colB.r, amount),
-          lerp(colA.g, colB.g, amount),
-          lerp(colA.b, colB.b, amount),
-          lerp(colA.a, colB.a, amount)
+          scalarLerp(colA.r, colB.r, amount),
+          scalarLerp(colA.g, colB.g, amount),
+          scalarLerp(colA.b, colB.b, amount),
+          scalarLerp(colA.a, colB.a, amount)
         )
       end
 
@@ -471,8 +471,8 @@ local function drawGaugeWindow(dt, winSize)
   for i = 0, segs - 1 do
     local f0 = redStartFrac + (redEndFrac - redStartFrac) * (i / segs)
     local f1 = redStartFrac + (redEndFrac - redStartFrac) * ((i + 0.6) / segs)
-    local a0 = lerp(startA, endA, f0)
-    local a1 = lerp(startA, endA, math.min(1.0, f1))
+    local a0 = scalarLerp(startA, endA, f0)
+    local a1 = scalarLerp(startA, endA, math.min(1.0, f1))
     ui.pathClear()
     ui.pathArcTo(center, arcOuter * 1.01, a0, a1, 8)
     ui.pathArcTo(center, arcInner * 0.95, a1, a0, 8)
