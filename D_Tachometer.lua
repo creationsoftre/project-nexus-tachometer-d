@@ -484,21 +484,6 @@ local function drawGaugeWindow(dt, winSize)
     end
   end
 
-  -- static red segment overlay from 8k-10k
-  local redStartFrac = 0.8
-  local redEndFrac   = 1.0
-  local segs = 7
-  for i = 0, segs - 1 do
-    local f0 = redStartFrac + (redEndFrac - redStartFrac) * (i / segs)
-    local f1 = redStartFrac + (redEndFrac - redStartFrac) * ((i + 0.6) / segs)
-    local a0 = scalarLerp(startA, endA, f0)
-    local a1 = scalarLerp(startA, endA, math.min(1.0, f1))
-    ui.pathClear()
-    ui.pathArcTo(center, arcOuter * 1.01, a0, a1, 8)
-    ui.pathArcTo(center, arcInner * 0.95, a1, a0, 8)
-    ui.pathFillConvex(rgbm(1, 0.15 + 0.1 * (i / segs), 0.15, 0.95))
-  end
-
   -- drag handle top right
   local dragSize = 26
   local dragMin  = vec2(winSize.x - dragSize - 16, 10)
