@@ -119,15 +119,10 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   local rpmFraction = clamp(rpm / (maxRpm * 1.05), 0, 1)
 
   --------------------------------------------------------
-  -- Background disc with shadow + subtle gradient
+  -- Background disc (transparent)
   --------------------------------------------------------
   local outerR = radius * 1.05
   local innerR = radius * 0.72
-  local dropShadowOffset = vec2(0, radius * 0.15)
-
-  ui.drawCircleFilled(center + dropShadowOffset, radius * 1.18, rgbm(0, 0, 0, 0.35))
-  ui.drawCircleFilled(center, radius * 1.12, rgbm(0, 0, 0, 0.25))
-
   ui.drawCircleFilled(center, outerR, t.bgOuter)
   ui.drawCircleFilled(center, outerR * 0.97, rgbm(t.bgOuter.r, t.bgOuter.g, t.bgOuter.b, 0.8))
   ui.drawCircle(center, outerR * 0.93, rgbm(0.2, 0.35, 0.45, 0.35), radius * 0.015)
@@ -287,8 +282,8 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   -- Digital speed / gear cluster
   --------------------------------------------------------
   local clusterW   = radius * 0.95
-  local clusterH   = radius * 0.34
-  local clusterY   = center.y + radius * 0.28
+  local clusterH   = radius * 0.32
+  local clusterY   = center.y + radius * 0.36
   local clusterMin = vec2(center.x - clusterW / 2, clusterY)
   local clusterMax = clusterMin + vec2(clusterW, clusterH)
 
@@ -300,8 +295,8 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   -- leave central area empty; only inner LCDs drawn
 
   local lcdMin = clusterMin + vec2(6, 6)
-  local lcdSplit = lcdMin.x + (clusterW * 0.62)
-  local lcdMax = vec2(lcdSplit - 6, clusterMax.y - 6)
+  local lcdSplit = lcdMin.x + (clusterW * 0.64)
+  local lcdMax = vec2(lcdSplit - 6, clusterMax.y - 10)
 
   ui.drawRectFilledMultiColor(
     lcdMin, lcdMax,
