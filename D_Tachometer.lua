@@ -241,8 +241,8 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
     local px   = -dirY
     local py   =  dirX
 
-    local tailR = radius * 0.05
-    local tipR  = arcOuter * 1.02
+    local tailR = -radius * 0.04
+    local tipR  = arcOuter * 1.06
     local halfW = radius * 0.03
 
     local tip   = vec2(center.x + dirX * tipR, center.y + dirY * tipR)
@@ -272,71 +272,82 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   --------------------------------------------------------
   -- Digital speed / gear cluster
   --------------------------------------------------------
-  local clusterHeight = radius * 0.28
-  local clusterMin = vec2(center.x - radius * 0.65, center.y + radius * 0.38)
-  local clusterMax = clusterMin + vec2(radius * 1.30, clusterHeight)
-  local lcdMin = clusterMin
-  local lcdMax = vec2(clusterMin.x + radius * 0.95, clusterMax.y)
+  local function drawRoundedRectFilled(minPt, maxPt, radius, color)
+    local r = math.max(0, math.min(radius, (maxPt.x - minPt.x) * 0.5, (maxPt.y - minPt.y) * 0.5))
+    ui.pathClear()
+    ui.pathArcTo(vec2(maxPt.x - r, maxPt.y - r), r, 0, math.pi / 2, 12)
+    ui.pathArcTo(vec2(minPt.x + r, maxPt.y - r), r, math.pi / 2, math.pi, 12)
+    ui.pathArcTo(vec2(minPt.x + r, minPt.y + r), r, math.pi, math.pi * 1.5, 12)
+    ui.pathArcTo(vec2(maxPt.x - r, minPt.y + r), r, math.pi * 1.5, math.pi * 2, 12)
+    ui.pathFillConvex(color)
+  end
 
-  ui.drawRectFilledMultiColor(
-    lcdMin, lcdMax,
-    rgbm(0.12, 0.80, 0.90, 0.75),
-    rgbm(0.25, 0.95, 1.00, 0.95),
-    rgbm(0.00, 0.28, 0.38, 0.95),
-    rgbm(0.00, 0.23, 0.33, 0.92)
-  )
-  ui.drawRect(lcdMin, lcdMax, rgbm(0, 0, 0, 1.0), 2.5)
+  local function strokeRoundedRect(minPt, maxPt, radius, color, thickness)
+    local r = math.max(0, math.min(radius, (maxPt.x - minPt.x) * 0.5, (maxPt.y - minPt.y) * 0.5))
+    ui.pathClear()
+    ui.pathArcTo(vec2(maxPt.x - r, maxPt.y - r), r, 0, math.pi / 2, 12)
+    ui.pathArcTo(vec2(minPt.x + r, maxPt.y - r), r, math.pi / 2, math.pi, 12)
+    ui.pathArcTo(vec2(minPt.x + r, minPt.y + r), r, math.pi, math.pi * 1.5, 12)
+    ui.pathArcTo(vec2(maxPt.x - r, minPt.y + r), r, math.pi * 1.5, math.pi * 2, 12)
+    ui.pathStroke(color, true, thickness)
+  end
+
+  local totalWidth   = radius * 1.12
+  local mainWidth    = totalWidth * 0.72
+  local gearWidth    = totalWidth - mainWidth
+  local gap          = radius * 0.04
+  local panelHeight  = radius * 0.25
+  local baseMinX     = center.x - (totalWidth + gap) * 0.5
+  local panelY       = center.y + radius * 0.38
+
+  local lcdMin = vec2(baseMinX, panelY)
+  local lcdMax = vec2(lcdMin.x + mainWidth, panelY + panelHeight)
+  drawRoundedRectFilled(lcdMin, lcdMax, panelHeight * 0.45, rgbm(0.12, 0.80, 0.90, 0.9))
+  strokeRoundedRect(lcdMin, lcdMax, panelHeight * 0.45, rgbm(0, 0, 0, 1.0), 2.3)
 
   local baseSpeed   = getCarSpeedKmh(car)
   local displaySpd  = math.abs(isKmh and baseSpeed or baseSpeed * KMH_TO_MPH)
   local speedText   = string.format("%d", math.floor(displaySpd + 0.5))
   local gearText    = formatGearText(car.gear)
 
-  local speedSize = radius * 0.22
+  local speedSize = panelHeight * 0.60
   local speedW    = ui.measureDWriteText(speedText, speedSize).x
   local speedPos  = vec2(
-    lcdMin.x + (lcdMax.x - lcdMin.x) * 0.25 - speedW / 2,
-    lcdMin.y + (lcdMax.y - lcdMin.y) * 0.15
+    lcdMin.x + (mainWidth - speedW) * 0.5,
+    lcdMin.y + panelHeight * 0.12
   )
   ui.dwriteDrawText(speedText, speedSize, speedPos, rgbm(0.90, 0.98, 1.0, 0.95))
 
   local unitText  = isKmh and "km/h" or "mph"
-  local unitSize  = radius * 0.10
+  local unitSize  = panelHeight * 0.35
   local unitW     = ui.measureDWriteText(unitText, unitSize).x
   local unitPos   = vec2(
-    lcdMin.x + (lcdMax.x - lcdMin.x) * 0.25 - unitW / 2,
+    lcdMin.x + (mainWidth - unitW) * 0.5,
     lcdMax.y - unitSize * 1.2
   )
   ui.dwriteDrawText(unitText, unitSize, unitPos, rgbm(0.92, 0.98, 1.0, 0.95))
 
-  local gearBoxMin = vec2(lcdMax.x + radius * 0.02, lcdMin.y)
-  local gearBoxMax = vec2(clusterMax.x, lcdMax.y)
-  ui.drawRectFilled(gearBoxMin + vec2(2, 4), gearBoxMax + vec2(4, 6), rgbm(0, 0, 0, 0.4))
-  ui.drawRectFilled(gearBoxMin, gearBoxMax, rgbm(0, 0, 0, 0.85))
-  ui.drawRectFilledMultiColor(
-    gearBoxMin + vec2(3, 3),
-    gearBoxMax - vec2(3, 3),
-    rgbm(0.12, 0.80, 0.90, 0.65),
-    rgbm(0.22, 0.98, 1.0, 0.85),
-    rgbm(0.00, 0.30, 0.45, 0.95),
-    rgbm(0.00, 0.20, 0.35, 0.92)
-  )
-  ui.drawRect(gearBoxMin, gearBoxMax, rgbm(0, 0, 0, 1.0), 2.0)
+  local gearBoxMin = vec2(lcdMax.x + gap, lcdMin.y)
+  local gearBoxMax = vec2(gearBoxMin.x + gearWidth - gap, lcdMin.y + panelHeight)
+  local gearRectWidth = gearBoxMax.x - gearBoxMin.x
 
-  local gearSize = radius * 0.20
+  drawRoundedRectFilled(gearBoxMin, gearBoxMax, panelHeight * 0.40, rgbm(0.12, 0.80, 0.90, 0.9))
+  strokeRoundedRect(gearBoxMin, gearBoxMax, panelHeight * 0.40, rgbm(0, 0, 0, 1.0), 2.0)
+
+  local gearSize = panelHeight * 0.55
   local gearW    = ui.measureDWriteText(gearText, gearSize).x
   local gearPos  = vec2(
-    gearBoxMin.x + (gearBoxMax.x - gearBoxMin.x) / 2 - gearW / 2,
-    gearBoxMin.y + (gearBoxMax.y - gearBoxMin.y) * 0.15
+    gearBoxMin.x + (gearRectWidth - gearW) * 0.5,
+    gearBoxMin.y + panelHeight * 0.35
   )
   ui.dwriteDrawText(gearText, gearSize, gearPos, rgbm(0.92, 0.98, 1.0, 0.95))
 
   local mtText = "MT"
-  local mtSize = radius * 0.13
+  local mtSize = panelHeight * 0.32
   local mtW    = ui.measureDWriteText(mtText, mtSize).x
   local mtPos  = vec2(
-    gearBoxMin.x + (gearBoxMax.x - gearBoxMin.x) / 2 - mtW / 2,
-    gearBoxMax.y - mtSize * 1.2
+    gearBoxMin.x + (gearRectWidth - mtW) * 0.5,
+    gearBoxMin.y + panelHeight * 0.08
   )
   ui.dwriteDrawText(mtText, mtSize, mtPos, rgbm(0.92, 0.98, 1.0, 0.9))
 
