@@ -64,6 +64,35 @@ local script_dir = detectScriptDir()
 local app_path = script_dir
 local config_path = joinPath(app_path, "config.ini")
 local themes_root = joinPath(app_path, "themes")
+local function hasFields(tbl, fields)
+  if type(tbl) ~= "table" then
+    return false
+  end
+  for _, field in ipairs(fields) do
+    if tbl[field] == nil then
+      return false
+    end
+  end
+  return true
+end
+
+local GL = acsys and acsys.GL
+local CS = acsys and acsys.CS
+
+local graphics_supported = type(ac) == "table"
+    and type(ac.newTexture) == "function"
+    and type(ac.glQuadTextured) == "function"
+    and type(ac.glBegin) == "function"
+    and type(ac.glEnd) == "function"
+    and type(ac.ext_glSetTexture) == "function"
+    and type(ac.ext_glVertexTex) == "function"
+    and type(ac.ext_glTexCoord2f) == "function"
+    and hasFields(GL, {"Quads", "Triangles"})
+
+local telemetry_supported = type(ac) == "table"
+    and type(ac.getFocusedCar) == "function"
+    and type(ac.getCarState) == "function"
+    and hasFields(CS, {"RPM", "SpeedKMH", "SpeedMPH", "Gear", "SlipAngle", "Gas", "Brake"})
 
 local function trim(value)
   return (value:gsub("^%s+", ""):gsub("%s+$", ""))
@@ -333,10 +362,6 @@ if rev_light_available then
 end
 
 local preview_path = joinPath(active_theme_dir, "preview.png")
-
-local graphics_supported = type(ac) == "table" and type(ac.newTexture) == "function"
-
-
 local app_window = nil
 local settings_window = nil
 local theme_label = nil
@@ -403,12 +428,48 @@ local function refreshSpeedList(value)
   local formatted = string.format("%.0f", value or 0)
   speed_list = {}
   for i = 1, #formatted do
-    local digit = tonumber(formatted:sub(i, i)) or 0
-    speed_list[#speed_list + 1] = digit
+    local ch = formatted:sub(i, i)
+    local digit = tonumber(ch)
+    if digit ~= nil then
+      speed_list[#speed_list + 1] = digit
+    end
   end
   if #speed_list == 0 then
     speed_list[1] = 0
   end
+end
+
+local function clampGearIndex(value)
+  if type(value) ~= "number" then
+    return 0
+  end
+  if value < 0 then
+    return 0
+  end
+  if value > 10 then
+    return 10
+  end
+  return math.floor(value)
+end
+
+local function getHeadlightsState(car_index)
+  if type(ac) == "table" and type(ac.ext_getHeadlights) == "function" then
+    local ok, value = pcall(ac.ext_getHeadlights, car_index)
+    if ok then
+      return not not value
+    end
+  end
+  return false
+end
+
+local function getCarNameSafe(car_index)
+  if type(ac) == "table" and type(ac.getCarName) == "function" then
+    local ok, value = pcall(ac.getCarName, car_index)
+    if ok and value then
+      return value
+    end
+  end
+  return ""
 end
 
 local function updateWindowSize()
@@ -711,7 +772,7 @@ function appGL(deltaT)
   end
 
   ac.glColor4f(1, 1, 1, 1)
-  ac.glBegin(acsys.GL.Quads)
+  ac.glBegin(GL.Quads)
 
   local gauge_table = rpm_gauge_textures
   if night_mode_available and get_headlights then
@@ -770,7 +831,7 @@ function appGL(deltaT)
   ac.glEnd()
 
   ac.glColor4f(1, 1, 1, 1)
-  ac.glBegin(acsys.GL.Quads)
+  ac.glBegin(GL.Quads)
   if night_mode_available and get_headlights then
     ac.ext_glSetTexture(night_rpm_bar_texture or rpm_bar_texture)
   else
@@ -818,7 +879,7 @@ function appGL(deltaT)
       local center_y = base_y + (height / 2)
       local coord_1 = degreeValue < 45 and tan(rad(degreeValue)) or 1
       ac.glColor4f(1, 1, 1, 1)
-      ac.glBegin(acsys.GL.Triangles)
+      ac.glBegin(GL.Triangles)
       ac.ext_glSetTexture(texture)
       local vx1, vy1 = rotatePedalPoint(base_x, base_y, center_x, center_y)
       ac.ext_glTexCoord2f(0, 0)
@@ -835,7 +896,7 @@ function appGL(deltaT)
       if degreeValue > 45 then
         local coord_2 = degreeValue > 90 and 0.5 or (1 - tan(rad(90 - degreeValue))) / 2
         ac.glColor4f(1, 1, 1, 1)
-        ac.glBegin(acsys.GL.Triangles)
+        ac.glBegin(GL.Triangles)
         ac.ext_glSetTexture(texture)
         local vx3, vy3 = rotatePedalPoint(base_x + width, base_y, center_x, center_y)
         ac.ext_glTexCoord2f(1, 0)
@@ -858,7 +919,7 @@ function appGL(deltaT)
           coord_3 = 0.5 + (tan(rad(degreeValue - 90)) / 2)
         end
         ac.glColor4f(1, 1, 1, 1)
-        ac.glBegin(acsys.GL.Triangles)
+        ac.glBegin(GL.Triangles)
         ac.ext_glSetTexture(texture)
         local vx5, vy5 = rotatePedalPoint(base_x + width, base_y + (height / 2), center_x, center_y)
         ac.ext_glTexCoord2f(1, 0.5)
@@ -924,7 +985,8 @@ function appGL(deltaT)
     end
   end
 
-  local gear_texture = gear_textures[gear] or gear_textures[0]
+  local gear_index = clampGearIndex(gear)
+  local gear_texture = gear_textures[gear_index] or gear_textures[0]
   if gear_texture then
     ac.glColor4f(1, 1, 1, 1)
     ac.glQuadTextured(gear_x * scale, gear_y * scale, gear_width * scale, gear_height * scale, gear_texture)
@@ -932,6 +994,9 @@ function appGL(deltaT)
 end
 
 function acUpdate(deltaT)
+  if not telemetry_supported then
+    return
+  end
   if alpha < 0 then
     flash_rate = 7.2
   elseif alpha > 1.2 then
@@ -961,21 +1026,21 @@ function acUpdate(deltaT)
 
   if timer2 > 0.1 then
     timer2 = 0
-    current_car = ac.getFocusedCar()
-    get_headlights = ac.ext_getHeadlights(current_car)
+    current_car = ac.getFocusedCar() or 0
+    get_headlights = getHeadlightsState(current_car)
     if has_ae86_gauge then
-      car_name = ac.getCarName(current_car) or ""
+      car_name = getCarNameSafe(current_car)
     end
     if status ~= 1 and drift_light_available and show_drift then
-      local angle_fl, angle_fr, angle_rl, angle_rr = ac.getCarState(current_car, acsys.CS.SlipAngle)
+      local angle_fl, angle_fr, angle_rl, angle_rr = ac.getCarState(current_car, CS.SlipAngle)
       angle_car = abs((angle_rl + angle_rr) / 2)
     end
-    gear = ac.getCarState(current_car, acsys.CS.Gear)
+    gear = ac.getCarState(current_car, CS.Gear)
     if lower_refresh_rate then
       if unit_kmh then
-        speed = ac.getCarState(current_car, acsys.CS.SpeedKMH)
+        speed = ac.getCarState(current_car, CS.SpeedKMH)
       else
-        speed = ac.getCarState(current_car, acsys.CS.SpeedMPH)
+        speed = ac.getCarState(current_car, CS.SpeedMPH)
       end
       refreshSpeedList(speed)
     end
@@ -984,29 +1049,29 @@ function acUpdate(deltaT)
   if lower_refresh_rate then
     if timer3 > 0.0333 then
       timer3 = 0
-      rpm = ac.getCarState(current_car, acsys.CS.RPM)
+      rpm = ac.getCarState(current_car, CS.RPM)
       if not info then
         maxRpm = math.max(maxRpm, rpm)
       end
       if pedal_gauge_available and show_pedal then
-        gas_value = ac.getCarState(current_car, acsys.CS.Gas)
-        brake_value = ac.getCarState(current_car, acsys.CS.Brake)
+        gas_value = ac.getCarState(current_car, CS.Gas)
+        brake_value = ac.getCarState(current_car, CS.Brake)
       end
     end
   else
-    rpm = ac.getCarState(current_car, acsys.CS.RPM)
+    rpm = ac.getCarState(current_car, CS.RPM)
     if not info then
       maxRpm = math.max(maxRpm, rpm)
     end
     if unit_kmh then
-      speed = ac.getCarState(current_car, acsys.CS.SpeedKMH)
+      speed = ac.getCarState(current_car, CS.SpeedKMH)
     else
-      speed = ac.getCarState(current_car, acsys.CS.SpeedMPH)
+      speed = ac.getCarState(current_car, CS.SpeedMPH)
     end
     refreshSpeedList(speed)
     if pedal_gauge_available and show_pedal then
-      gas_value = ac.getCarState(current_car, acsys.CS.Gas)
-      brake_value = ac.getCarState(current_car, acsys.CS.Brake)
+      gas_value = ac.getCarState(current_car, CS.Gas)
+      brake_value = ac.getCarState(current_car, CS.Brake)
     end
   end
 end
@@ -1035,8 +1100,9 @@ local function closeSimInfo()
 end
 
 do
-  local ok, ffi = pcall(require, "ffi")
-  if ok then
+  local ok, ffi_lib = pcall(require, "ffi")
+  if ok and ffi_lib and ffi_lib.cdef then
+    local ffi = ffi_lib
     local C = ffi.C
     ffi.cdef[[
       typedef void* HANDLE;
