@@ -191,6 +191,150 @@ local function saveConfig()
   end
 end
 
+local theme = getConfigNumber("theme", 6)
+if type(theme) ~= "number" then
+  theme = 6
+end
+theme = math.max(3, math.min(7, theme))
+local scale = getConfigNumber("scale", 100.0) / 100.0
+local unit_kmh = getConfigBool("unit_kmh", true)
+local show_drift = getConfigBool("show_drift", true)
+local show_pedal = getConfigBool("show_pedal", true)
+local redLimit_offset = getConfigNumber("redLimit_offset", 2000)
+local fixed_speedo_color = getConfigBool("fixed_speedo_color", false)
+local lower_refresh_rate = getConfigBool("lower_refresh_rate", false)
+
+saveConfig()
+
+local active_theme_dir = joinPath(themes_root, string.format("D%d", theme))
+local theme_config = readIni(joinPath(active_theme_dir, "theme_config.ini"))
+
+local function themeBool(section, key, default)
+  local sec = theme_config[section]
+  if not sec then
+    return default
+  end
+  local parsed = parseBool(sec[key])
+  if parsed == nil then
+    return default
+  end
+  return parsed
+end
+
+local function themeNumber(section, key, default)
+  local sec = theme_config[section]
+  if not sec then
+    return default
+  end
+  local value = tonumber(sec[key])
+  if value == nil then
+    return default
+  end
+  return value
+end
+
+local night_mode_available = themeBool("General", "night_mode_available", false)
+local pedal_gauge_available = themeBool("General", "pedal_gauge_available", false)
+local drift_light_available = themeBool("General", "drift_light_available", false)
+local rev_light_available = themeBool("General", "rev_light_available", false)
+local variable_speed_color = themeBool("General", "variable_speed_color", false)
+local has_ae86_gauge = themeBool("General", "has_ae86_gauge", false)
+
+local background_width = themeNumber("Background", "background_width", 335)
+local background_height = themeNumber("Background", "background_height", 335)
+local background_pedal_width = themeNumber("Background", "background_pedal_width", background_width)
+local background_pedal_height = themeNumber("Background", "background_pedal_height", background_height)
+
+local gear_x = themeNumber("Gear", "gear_x", 249)
+local gear_y = themeNumber("Gear", "gear_y", 301)
+local gear_width = themeNumber("Gear", "gear_width", 33)
+local gear_height = themeNumber("Gear", "gear_height", 27)
+
+local gauge_x = themeNumber("RPM Gauge", "gauge_x", 0)
+local gauge_y = themeNumber("RPM Gauge", "gauge_y", 0)
+local gauge_width = themeNumber("RPM Gauge", "gauge_width", 335)
+local gauge_height = themeNumber("RPM Gauge", "gauge_height", 270)
+local maxRpm_state_0 = themeNumber("RPM Gauge", "maxRpm_state_0", 500)
+local maxRpm_state_1 = themeNumber("RPM Gauge", "maxRpm_state_1", 7000)
+local maxRpm_state_2 = themeNumber("RPM Gauge", "maxRpm_state_2", 8000)
+local maxRpm_state_3 = themeNumber("RPM Gauge", "maxRpm_state_3", 10000)
+local maxRpm_state_4 = themeNumber("RPM Gauge", "maxRpm_state_4", 12000)
+local maxRpm_state_5 = themeNumber("RPM Gauge", "maxRpm_state_5", 14000)
+local maxRpm_state_6 = themeNumber("RPM Gauge", "maxRpm_state_6", 16000)
+
+local degree_available = themeNumber("RPM Bar", "degree_available", 250)
+local degree_offset = themeNumber("RPM Bar", "degree_offset", -125)
+local rpm_x = themeNumber("RPM Bar", "rpm_x", 161.5)
+local rpm_y = themeNumber("RPM Bar", "rpm_y", 21.5)
+local rpm_width = themeNumber("RPM Bar", "rpm_width", 12)
+local rpm_height = themeNumber("RPM Bar", "rpm_height", 175)
+local rpm_center_x = themeNumber("RPM Bar", "rpm_center_x", 167.5)
+local rpm_center_y = themeNumber("RPM Bar", "rpm_center_y", 167.5)
+
+local speed_x = themeNumber("Speed", "speed_x", 130)
+local speed_y = themeNumber("Speed", "speed_y", 282)
+local speed_width = themeNumber("Speed", "speed_width", 38)
+local speed_height = themeNumber("Speed", "speed_height", 35)
+local speed_gap = themeNumber("Speed", "speed_gap", 0)
+
+local unit_x = themeNumber("Speed Unit", "unit_x", 166)
+local unit_y = themeNumber("Speed Unit", "unit_y", 297)
+local unit_width = themeNumber("Speed Unit", "unit_width", 68)
+local unit_height = themeNumber("Speed Unit", "unit_height", 24)
+
+local gas_x = 0
+local gas_y = 0
+local gas_width = 0
+local gas_height = 0
+local brake_x = 0
+local brake_y = 0
+local brake_width = 0
+local brake_height = 0
+local degree_gas = 0
+local degree_brake = 0
+local pedal_offset = 0
+
+if pedal_gauge_available then
+  gas_x = themeNumber("Pedal", "gas_x", 375)
+  gas_y = themeNumber("Pedal", "gas_y", 107.5)
+  gas_width = themeNumber("Pedal", "gas_width", 77.5)
+  gas_height = themeNumber("Pedal", "gas_height", 155)
+  brake_x = themeNumber("Pedal", "brake_x", 375)
+  brake_y = themeNumber("Pedal", "brake_y", 132.5)
+  brake_width = themeNumber("Pedal", "brake_width", 52.5)
+  brake_height = themeNumber("Pedal", "brake_height", 105)
+  degree_gas = themeNumber("Pedal", "degree_gas", 135)
+  degree_brake = themeNumber("Pedal", "degree_brake", 135)
+  pedal_offset = themeNumber("Pedal", "pedal_offset", 3)
+end
+
+local drift_x = 0
+local drift_y = 0
+local drift_width = 0
+local drift_height = 0
+
+if drift_light_available then
+  drift_x = themeNumber("Drift Light", "drift_x", 0)
+  drift_y = themeNumber("Drift Light", "drift_y", 0)
+  drift_width = themeNumber("Drift Light", "drift_width", 0)
+  drift_height = themeNumber("Drift Light", "drift_height", 0)
+end
+
+local rev_x = 0
+local rev_y = 0
+local rev_width = 0
+local rev_height = 0
+
+if rev_light_available then
+  rev_x = themeNumber("Rev Light", "rev_x", 0)
+  rev_y = themeNumber("Rev Light", "rev_y", 0)
+  rev_width = themeNumber("Rev Light", "rev_width", 0)
+  rev_height = themeNumber("Rev Light", "rev_height", 0)
+end
+
+local preview_path = joinPath(active_theme_dir, "preview.png")
+
+
 local app_window = nil
 local settings_window = nil
 local theme_label = nil
@@ -838,148 +982,6 @@ function acShutdown()
   closeSimInfo()
 end
 
-local theme = getConfigNumber("theme", 6)
-if type(theme) ~= "number" then
-  theme = 6
-end
-theme = math.max(3, math.min(7, theme))
-local scale = getConfigNumber("scale", 100.0) / 100.0
-local unit_kmh = getConfigBool("unit_kmh", true)
-local show_drift = getConfigBool("show_drift", true)
-local show_pedal = getConfigBool("show_pedal", true)
-local redLimit_offset = getConfigNumber("redLimit_offset", 2000)
-local fixed_speedo_color = getConfigBool("fixed_speedo_color", false)
-local lower_refresh_rate = getConfigBool("lower_refresh_rate", false)
-
-saveConfig()
-
-local active_theme_dir = joinPath(themes_root, string.format("D%d", theme))
-local theme_config = readIni(joinPath(active_theme_dir, "theme_config.ini"))
-
-local function themeBool(section, key, default)
-  local sec = theme_config[section]
-  if not sec then
-    return default
-  end
-  local parsed = parseBool(sec[key])
-  if parsed == nil then
-    return default
-  end
-  return parsed
-end
-
-local function themeNumber(section, key, default)
-  local sec = theme_config[section]
-  if not sec then
-    return default
-  end
-  local value = tonumber(sec[key])
-  if value == nil then
-    return default
-  end
-  return value
-end
-
-local night_mode_available = themeBool("General", "night_mode_available", false)
-local pedal_gauge_available = themeBool("General", "pedal_gauge_available", false)
-local drift_light_available = themeBool("General", "drift_light_available", false)
-local rev_light_available = themeBool("General", "rev_light_available", false)
-local variable_speed_color = themeBool("General", "variable_speed_color", false)
-local has_ae86_gauge = themeBool("General", "has_ae86_gauge", false)
-
-local background_width = themeNumber("Background", "background_width", 335)
-local background_height = themeNumber("Background", "background_height", 335)
-local background_pedal_width = themeNumber("Background", "background_pedal_width", background_width)
-local background_pedal_height = themeNumber("Background", "background_pedal_height", background_height)
-
-local gear_x = themeNumber("Gear", "gear_x", 249)
-local gear_y = themeNumber("Gear", "gear_y", 301)
-local gear_width = themeNumber("Gear", "gear_width", 33)
-local gear_height = themeNumber("Gear", "gear_height", 27)
-
-local gauge_x = themeNumber("RPM Gauge", "gauge_x", 0)
-local gauge_y = themeNumber("RPM Gauge", "gauge_y", 0)
-local gauge_width = themeNumber("RPM Gauge", "gauge_width", 335)
-local gauge_height = themeNumber("RPM Gauge", "gauge_height", 270)
-local maxRpm_state_0 = themeNumber("RPM Gauge", "maxRpm_state_0", 500)
-local maxRpm_state_1 = themeNumber("RPM Gauge", "maxRpm_state_1", 7000)
-local maxRpm_state_2 = themeNumber("RPM Gauge", "maxRpm_state_2", 8000)
-local maxRpm_state_3 = themeNumber("RPM Gauge", "maxRpm_state_3", 10000)
-local maxRpm_state_4 = themeNumber("RPM Gauge", "maxRpm_state_4", 12000)
-local maxRpm_state_5 = themeNumber("RPM Gauge", "maxRpm_state_5", 14000)
-local maxRpm_state_6 = themeNumber("RPM Gauge", "maxRpm_state_6", 16000)
-
-local degree_available = themeNumber("RPM Bar", "degree_available", 250)
-local degree_offset = themeNumber("RPM Bar", "degree_offset", -125)
-local rpm_x = themeNumber("RPM Bar", "rpm_x", 161.5)
-local rpm_y = themeNumber("RPM Bar", "rpm_y", 21.5)
-local rpm_width = themeNumber("RPM Bar", "rpm_width", 12)
-local rpm_height = themeNumber("RPM Bar", "rpm_height", 175)
-local rpm_center_x = themeNumber("RPM Bar", "rpm_center_x", 167.5)
-local rpm_center_y = themeNumber("RPM Bar", "rpm_center_y", 167.5)
-
-local speed_x = themeNumber("Speed", "speed_x", 130)
-local speed_y = themeNumber("Speed", "speed_y", 282)
-local speed_width = themeNumber("Speed", "speed_width", 38)
-local speed_height = themeNumber("Speed", "speed_height", 35)
-local speed_gap = themeNumber("Speed", "speed_gap", 0)
-
-local unit_x = themeNumber("Speed Unit", "unit_x", 166)
-local unit_y = themeNumber("Speed Unit", "unit_y", 297)
-local unit_width = themeNumber("Speed Unit", "unit_width", 68)
-local unit_height = themeNumber("Speed Unit", "unit_height", 24)
-
-local gas_x = 0
-local gas_y = 0
-local gas_width = 0
-local gas_height = 0
-local brake_x = 0
-local brake_y = 0
-local brake_width = 0
-local brake_height = 0
-local degree_gas = 0
-local degree_brake = 0
-local pedal_offset = 0
-
-if pedal_gauge_available then
-  gas_x = themeNumber("Pedal", "gas_x", 375)
-  gas_y = themeNumber("Pedal", "gas_y", 107.5)
-  gas_width = themeNumber("Pedal", "gas_width", 77.5)
-  gas_height = themeNumber("Pedal", "gas_height", 155)
-  brake_x = themeNumber("Pedal", "brake_x", 375)
-  brake_y = themeNumber("Pedal", "brake_y", 132.5)
-  brake_width = themeNumber("Pedal", "brake_width", 52.5)
-  brake_height = themeNumber("Pedal", "brake_height", 105)
-  degree_gas = themeNumber("Pedal", "degree_gas", 135)
-  degree_brake = themeNumber("Pedal", "degree_brake", 135)
-  pedal_offset = themeNumber("Pedal", "pedal_offset", 3)
-end
-
-local drift_x = 0
-local drift_y = 0
-local drift_width = 0
-local drift_height = 0
-
-if drift_light_available then
-  drift_x = themeNumber("Drift Light", "drift_x", 0)
-  drift_y = themeNumber("Drift Light", "drift_y", 0)
-  drift_width = themeNumber("Drift Light", "drift_width", 0)
-  drift_height = themeNumber("Drift Light", "drift_height", 0)
-end
-
-local rev_x = 0
-local rev_y = 0
-local rev_width = 0
-local rev_height = 0
-
-if rev_light_available then
-  rev_x = themeNumber("Rev Light", "rev_x", 0)
-  rev_y = themeNumber("Rev Light", "rev_y", 0)
-  rev_width = themeNumber("Rev Light", "rev_width", 0)
-  rev_height = themeNumber("Rev Light", "rev_height", 0)
-end
-
-local preview_path = joinPath(active_theme_dir, "preview.png")
 
 local info = nil
 
