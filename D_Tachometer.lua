@@ -2,10 +2,21 @@
 
 local KMH_TO_MPH      = 0.621371
 local WINDOW_ID       = 'Nexus_DTachometer'
-local WINDOW_SIZE     = vec2(540, 360)
+local WINDOW_SIZE     = vec2(560, 400)
 local INITIAL_PADDING = vec2(30, 40)
+local HEADER_HEIGHT   = 48
+
+local STORAGE_UNIT = ac and ac.storage and ac.storage({ group = 'NexusDTacho', name = 'UnitIsKMH', value = true }) or nil
 
 local hudPos
+local draggingHud = false
+local unitLocked = false
+local isKmh = STORAGE_UNIT and STORAGE_UNIT.value or true
+
+local function setUnit(value)
+  isKmh = value
+  if STORAGE_UNIT then STORAGE_UNIT.value = value end
+end
 
 local clamp = clamp or function(v, minV, maxV)
   if v < minV then return minV end
@@ -17,8 +28,6 @@ local lerp = lerp or function(a, b, t)
   return a + (b - a) * t
 end
 
-local isKmh = true
-
 local function trySimField(sim, field)
   local ok, value = pcall(function()
     return sim[field]
@@ -27,25 +36,26 @@ local function trySimField(sim, field)
 end
 
 local function updateUnitPreference()
+  if unitLocked then return end
   if not ac or not ac.getSim then return end
   local sim = ac.getSim()
   if not sim then return end
 
   local km = trySimField(sim, 'isInKilometers')
   if km ~= nil then
-    isKmh = km
+    setUnit(km)
     return
   end
 
   local metric = trySimField(sim, 'isMetric')
   if metric ~= nil then
-    isKmh = metric
+    setUnit(metric)
     return
   end
 
   local mph = trySimField(sim, 'isMPH')
   if mph ~= nil then
-    isKmh = not mph
+    setUnit(not mph)
   end
 end
 
@@ -210,48 +220,40 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   end
 
   --------------------------------------------------------
-  -- RPM needle (bar with soft glow)
+  -- RPM needle (triangular pointer with glow)
   --------------------------------------------------------
   if rpmFraction > 0 then
-    -- angle for current RPM (same sweep as arc)
     local angle = lerp(startA, endA, rpmFraction)
-
     local dirX = math.cos(angle)
     local dirY = math.sin(angle)
-    local px   = -dirY   -- perpendicular (for width)
+    local px   = -dirY
     local py   =  dirX
 
-    -- from just outside the hub to near arc outer edge
-    local innerR = radius * 0.16
-    local outerR = arcOuter * 0.98
+    local tailR = radius * 0.18
+    local baseR = radius * 0.32
+    local tipR  = arcOuter * 0.99
+    local halfW = radius * 0.055
 
-    -- outer “glow” bar
-    local outerHalfW = radius * 0.055
-    local ix = center.x + dirX * innerR
-    local iy = center.y + dirY * innerR
-    local ox = center.x + dirX * outerR
-    local oy = center.y + dirY * outerR
+    local tip   = vec2(center.x + dirX * tipR,  center.y + dirY * tipR)
+    local base  = vec2(center.x + dirX * baseR, center.y + dirY * baseR)
+    local tail  = vec2(center.x + dirX * tailR, center.y + dirY * tailR)
+    local left  = vec2(base.x + px * halfW, base.y + py * halfW)
+    local right = vec2(base.x - px * halfW, base.y - py * halfW)
 
-    local function quad(halfW, col)
-      ui.pathClear()
-      ui.pathLineTo(vec2(ix + px * halfW, iy + py * halfW))
-      ui.pathLineTo(vec2(ix - px * halfW, iy - py * halfW))
-      ui.pathLineTo(vec2(ox - px * halfW, oy - py * halfW))
-      ui.pathLineTo(vec2(ox + px * halfW, oy + py * halfW))
-      ui.pathFillConvex(col)
-    end
+    ui.pathClear()
+    ui.pathLineTo(left)
+    ui.pathLineTo(tip)
+    ui.pathLineTo(right)
+    ui.pathFillConvex(rgbm(1.0, 0.30, 0.15, 0.95))
 
-    -- darker red outer layer (soft edges)
-    quad(
-      outerHalfW,
-      rgbm(t.arcRed.r * 0.6, t.arcRed.g * 0.15, t.arcRed.b * 0.15, 0.9)
-    )
+    ui.pathClear()
+    ui.pathLineTo(left)
+    ui.pathLineTo(tail)
+    ui.pathLineTo(right)
+    ui.pathFillConvex(rgbm(0.08, 0.0, 0.0, 0.75))
 
-    -- bright inner core (thin, sharp)
-    quad(
-      radius * 0.026,
-      rgbm(1.0, 0.15, 0.0, 1.0)
-    )
+    ui.drawLine(tail, tip, rgbm(1.0, 0.35, 0.2, 0.65), radius * 0.02)
+    ui.drawCircleFilled(tail, radius * 0.05, rgbm(0.9, 0.2, 0.1, 0.35))
   end
 
 
@@ -267,9 +269,9 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   --------------------------------------------------------
   -- Digital speed / gear cluster (no logos)
   --------------------------------------------------------
-  local clusterW   = radius * 1.10
+  local clusterW   = radius * 1.05
   local clusterH   = radius * 0.42
-  local clusterY   = center.y + radius * 0.08
+  local clusterY   = center.y + radius * 0.42
   local clusterMin = vec2(center.x - clusterW / 2, clusterY)
   local clusterMax = clusterMin + vec2(clusterW, clusterH)
 
@@ -357,96 +359,50 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   ui.dwriteDrawText(mtText, mtSize, mtPos, rgbm(0.92, 0.98, 1.0, 0.9))
 
   --------------------------------------------------------
-  -- Accel / Brake mini gauge (right disc, GRADIENT)
+  -- Accel / Brake semi gauge hugging main dial
   --------------------------------------------------------
-  local subR      = radius * 0.55
-  local subCenter = vec2(center.x + radius * 1.10, center.y + radius * 0.08)
-
-  ui.drawCircleFilled(subCenter + vec2(0, subR * 0.12), subR * 1.05, rgbm(0, 0, 0, 0.35))
-  ui.drawCircleFilled(subCenter, subR, rgbm(t.bgOuter.r, t.bgOuter.g, t.bgOuter.b, 0.85))
-  ui.drawCircleFilled(subCenter, subR * 0.85, rgbm(0.03, 0.05, 0.08, 0.8))
-  ui.drawCircleFilled(subCenter, subR * 0.70, rgbm(0.01, 0.02, 0.04, 0.95))
-  ui.drawCircle(subCenter, subR * 0.95, rgbm(0.6, 0.9, 1.0, 0.35), 1.8)
-
   local accel = clamp(car.gas or car.throttle or 0.0, 0.0, 1.0)
   local brake = clamp(car.brake or 0.0, 0.0, 1.0)
+  local pedalCenter = vec2(center.x + radius * 0.78, center.y - radius * 0.05)
+  local semiOuter   = radius * 0.95
+  local semiInner   = semiOuter - radius * 0.20
+  local halfStart   = math.rad(-90)
+  local halfEnd     = math.rad( 90)
 
-  local sStart = math.rad(-210)
-  local sEnd   = math.rad(  30)
-  local sOuter = subR * 0.98
-  local sInner = subR * 0.78
-
-  -- tiny helper for color interpolation
-  local function lerpColor(c1, c2, t)
+  local function lerpColor(colA, colB, amount)
     return rgbm(
-      c1.r + (c2.r - c1.r) * t,
-      c1.g + (c2.g - c1.g) * t,
-      c1.b + (c2.b - c1.b) * t,
-      c1.a + (c2.a - c1.a) * t
+      lerp(colA.r, colB.r, amount),
+      lerp(colA.g, colB.g, amount),
+      lerp(colA.b, colB.b, amount),
+      lerp(colA.a, colB.a, amount)
     )
   end
 
-  ------------------------------------------------------
-  -- ACCEL (blue gradient)
-  ------------------------------------------------------
-  if accel > 0.0 then
-    local aStartFrac = 0.0
-    local aEndFrac   = 0.55 * accel      -- only fills upper half of arc
-    local segs       = 28
-
-    local cBright = rgbm(0.05, 0.95, 1.00, 1.0)  -- start of arc
-    local cDark   = rgbm(0.00, 0.40, 0.80, 1.0)  -- tail of arc
-
-    for i = 0, segs - 1 do
-      local f0   = aStartFrac + (aEndFrac - aStartFrac) * (i     / segs)
-      local f1   = aStartFrac + (aEndFrac - aStartFrac) * ((i+1) / segs)
-      local midT = (i + 0.5) / segs       -- 0 → 1 along the drawn part
-      local col  = lerpColor(cBright, cDark, midT)
-
-      local a0 = lerp(sStart, sEnd, f0)
-      local a1 = lerp(sStart, sEnd, f1)
-
-      ui.pathClear()
-      ui.pathArcTo(subCenter, sOuter, a0, a1, 4)
-      ui.pathArcTo(subCenter, sInner, a1, a0, 4)
-      ui.pathStroke(col, true, 3.0)
-    end
+  local function fillSemi(startA, endA, value, c1, c2)
+    if value <= 0 then return end
+    local span = endA - startA
+    local finish = startA + span * value
+    ui.pathClear()
+    ui.pathArcTo(pedalCenter, semiOuter, startA, finish, 48)
+    ui.pathArcTo(pedalCenter, semiInner, finish, startA, 48)
+    ui.pathFillConvex(lerpColor(c1, c2, value))
   end
 
-  ------------------------------------------------------
-  -- BRAKE (red gradient)
-  ------------------------------------------------------
-  if brake > 0.0 then
-    local bBaseFrac = 0.55              -- where brake section starts
-    local bEndFrac  = bBaseFrac + 0.45 * brake
-    local segs      = 28
+  ui.pathClear()
+  ui.pathArcTo(pedalCenter, semiOuter, halfStart, halfEnd, 64)
+  ui.pathArcTo(pedalCenter, semiInner, halfEnd, halfStart, 64)
+  ui.pathFillConvex(rgbm(0.02, 0.04, 0.08, 0.65))
+  ui.drawCircle(pedalCenter, semiOuter, rgbm(0.6, 0.9, 1.0, 0.35), 1.4, 64)
 
-    local cBright = rgbm(1.00, 0.30, 0.10, 1.0)  -- start
-    local cDark   = rgbm(0.70, 0.00, 0.00, 1.0)  -- tail
+  fillSemi(halfStart, 0, accel, rgbm(0.15, 0.65, 1.0, 0.35), rgbm(0.35, 0.95, 1.0, 0.95))
+  fillSemi(0, halfEnd, brake, rgbm(0.8, 0.1, 0.1, 0.35), rgbm(1.0, 0.35, 0.2, 0.95))
 
-    for i = 0, segs - 1 do
-      local f0   = bBaseFrac + (bEndFrac - bBaseFrac) * (i     / segs)
-      local f1   = bBaseFrac + (bEndFrac - bBaseFrac) * ((i+1) / segs)
-      local midT = (i + 0.5) / segs
-      local col  = lerpColor(cBright, cDark, midT)
-
-      local a0 = lerp(sStart, sEnd, f0)
-      local a1 = lerp(sStart, sEnd, f1)
-
-      ui.pathClear()
-      ui.pathArcTo(subCenter, sOuter, a0, a1, 4)
-      ui.pathArcTo(subCenter, sInner, a1, a0, 4)
-      ui.pathStroke(col, true, 3.0)
-    end
-  end
-
-  -- labels stay the same
   local pSize = radius * 0.11
   ui.dwriteDrawText("ACCEL", pSize,
-    vec2(subCenter.x + subR * 0.05, subCenter.y - subR * 0.25),
+    vec2(pedalCenter.x + radius * 0.26, pedalCenter.y - radius * 0.28),
     rgbm(0.85, 0.96, 1.0, 0.95))
   ui.dwriteDrawText("BRAKE", pSize,
-    vec2(subCenter.x + subR * 0.05, subCenter.y),
+    vec2(pedalCenter.x + radius * 0.26, pedalCenter.y + radius * 0.18),
     rgbm(0.95, 0.85, 0.85, 0.95))
 end
 
@@ -473,8 +429,74 @@ local function drawGaugeWindow(dt, winSize)
     return
   end
 
-  local radius = math.min(winSize.x, winSize.y) * 0.45
-  local center = vec2(winSize.x * 0.5, winSize.y * 0.58)
+  local winPos     = ui.windowPos()
+  local mousePos   = ui.mousePos()
+  local localMouse = vec2(mousePos.x - winPos.x, mousePos.y - winPos.y)
+
+  -- toggle pill
+  local togglePos  = vec2(16, 10)
+  local toggleSize = vec2(120, 28)
+  local toggleEnd  = togglePos + toggleSize
+  local toggleMidX = togglePos.x + toggleSize.x * 0.5
+
+  ui.drawRectFilled(togglePos, toggleEnd, rgbm(0, 0, 0, 0.45))
+  ui.drawRect(togglePos, toggleEnd, rgbm(1, 1, 1, 0.2))
+
+  local kmhRectMin = togglePos
+  local kmhRectMax = vec2(toggleMidX, toggleEnd.y)
+  local mphRectMin = vec2(toggleMidX, togglePos.y)
+  local mphRectMax = toggleEnd
+
+  if isKmh then
+    ui.drawRectFilled(kmhRectMin, kmhRectMax, rgbm(0.05, 0.55, 0.95, 0.85))
+  else
+    ui.drawRectFilled(mphRectMin, mphRectMax, rgbm(0.05, 0.35, 0.95, 0.85))
+  end
+
+  ui.dwriteDrawText("KMH", 14, vec2(kmhRectMin.x + 10, kmhRectMin.y + 5), rgbm(1, 1, 1, 0.9))
+  ui.dwriteDrawText("MPH", 14, vec2(mphRectMin.x + 10, mphRectMin.y + 5), rgbm(1, 1, 1, 0.9))
+
+  if ui.mouseClicked(0) then
+    if localMouse.x >= kmhRectMin.x and localMouse.x <= kmhRectMax.x
+      and localMouse.y >= kmhRectMin.y and localMouse.y <= kmhRectMax.y then
+      unitLocked = true
+      setUnit(true)
+    elseif localMouse.x >= mphRectMin.x and localMouse.x <= mphRectMax.x
+      and localMouse.y >= mphRectMin.y and localMouse.y <= mphRectMax.y then
+      unitLocked = true
+      setUnit(false)
+    end
+  end
+
+  -- drag handle top right
+  local dragSize = 26
+  local dragMin  = vec2(winSize.x - dragSize - 16, 10)
+  local dragMax  = dragMin + vec2(dragSize, dragSize)
+  ui.drawRectFilled(dragMin, dragMax, rgbm(0, 0, 0, 0.4))
+  ui.drawRect(dragMin, dragMax, rgbm(1, 1, 1, 0.2))
+
+  local dragCenter = vec2((dragMin.x + dragMax.x) * 0.5, (dragMin.y + dragMax.y) * 0.5)
+  local arm = dragSize * 0.35
+  ui.drawLine(vec2(dragCenter.x - arm, dragCenter.y), vec2(dragCenter.x + arm, dragCenter.y), rgbm(1,1,1,0.75), 1.3)
+  ui.drawLine(vec2(dragCenter.x, dragCenter.y - arm), vec2(dragCenter.x, dragCenter.y + arm), rgbm(1,1,1,0.75), 1.3)
+
+  local overDrag =
+    localMouse.x >= dragMin.x and localMouse.x <= dragMax.x and
+    localMouse.y >= dragMin.y and localMouse.y <= dragMax.y
+
+  if overDrag and ui.mouseClicked(0) then
+    draggingHud = true
+  end
+  if not ui.mouseDown(0) then
+    draggingHud = false
+  end
+  if draggingHud and ui.mouseDown(0) and hudPos then
+    local delta = ui.mouseDelta()
+    hudPos = vec2(hudPos.x + delta.x, hudPos.y + delta.y)
+  end
+
+  local radius = math.min(winSize.x, winSize.y - HEADER_HEIGHT) * 0.45
+  local center = vec2(winSize.x * 0.48, HEADER_HEIGHT + radius * 1.05)
   drawInitialDStyleGauge(car, center, radius, dt)
 end
 
@@ -491,3 +513,4 @@ function script.drawUI(dt)
     drawGaugeWindow(dt, winSize)
   ui.endTransparentWindow()
 end
+
