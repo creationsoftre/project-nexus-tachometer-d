@@ -1,6 +1,70 @@
+--!SERVER_SCRIPT
+
+local KMH_TO_MPH      = 0.621371
+local WINDOW_ID       = 'Nexus_DTachometer'
+local WINDOW_SIZE     = vec2(540, 360)
+local INITIAL_PADDING = vec2(30, 40)
+
+local hudPos
+
+local clamp = clamp or function(v, minV, maxV)
+  if v < minV then return minV end
+  if v > maxV then return maxV end
+  return v
+end
+
+local lerp = lerp or function(a, b, t)
+  return a + (b - a) * t
+end
+
+local isKmh = true
+
+local function updateUnitPreference()
+  if not ac or not ac.getSim then return end
+  local sim = ac.getSim()
+  if not sim then return end
+
+  if sim.isInKilometers ~= nil then
+    isKmh = sim.isInKilometers
+  elseif sim.isMetric ~= nil then
+    isKmh = sim.isMetric
+  elseif sim.isMPH ~= nil then
+    isKmh = not sim.isMPH
+  end
+end
+
+local function getCarSpeedKmh(car)
+  if not car then return 0 end
+  return car.speedKmh or car.speedKMH or ((car.speed or 0) * 3.6) or 0
+end
+
+local function formatGearText(gear)
+  if not gear or gear == 0 then return 'N' end
+  if gear < 0 then return 'R' end
+  return tostring(gear)
+end
+
+local theme = {
+  revWarn = 0.88,
+  bgOuter = rgbm(0.08, 0.08, 0.10, 1.0),
+  bgInner = rgbm(0.02, 0.02, 0.04, 1.0),
+  arcBase = rgbm(0.16, 0.16, 0.20, 1.0),
+  arcFill = rgbm(0.30, 0.75, 1.00, 0.95),
+  arcRed  = rgbm(1.00, 0.30, 0.20, 1.0),
+  chrome  = rgbm(0.92, 0.92, 0.95, 1.0),
+  label   = rgbm(0.80, 0.85, 0.92, 0.95),
+  digital = rgbm(0.35, 0.95, 1.00, 1.0),
+  bgOuterHighlight = rgbm(0, 0, 0, 1)
+}
+
+local function getTheme()
+  return theme
+end
+
 local function drawInitialDStyleGauge(car, center, radius, dt)
   local t      = getTheme()
   local maxRpm = car.rpmLimiter
+  local rpm    = car.rpm or 0
   if maxRpm <= 0 then maxRpm = 8000 end
   local rpmFraction = clamp(rpm / (maxRpm * 1.05), 0, 1)
 
@@ -117,7 +181,7 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   --------------------------------------------------------
   if rpmFraction > 0 then
     -- angle for current RPM (same sweep as arc)
-    local angle = currentEnd
+    local angle = lerp(startA, endA, rpmFraction)
 
     local dirX = math.cos(angle)
     local dirY = math.sin(angle)
@@ -193,9 +257,10 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   ui.drawRect(innerMin, innerMax, rgbm(t.digital.r, t.digital.g, t.digital.b, 0.9), 1.5)
   ui.drawRect(clusterMin, clusterMax, rgbm(0, 0, 0, 0.8))
 
-  local spd       = getSpeed()
-  local speedText = string.format("%d", spd)
-  local gearText  = getGearText()
+  local baseSpeed   = getCarSpeedKmh(car)
+  local displaySpd  = math.abs(isKmh and baseSpeed or baseSpeed * KMH_TO_MPH)
+  local speedText   = string.format("%d", math.floor(displaySpd + 0.5))
+  local gearText    = formatGearText(car.gear)
 
   -- speed digits (left)
   local speedSize = radius * 0.26
@@ -339,4 +404,46 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   ui.dwriteDrawText("BRAKE", pSize,
     vec2(subCenter.x + subR * 0.05, subCenter.y),
     t.label)
+end
+
+local function ensureHudPosition(winSize)
+  if hudPos then return end
+  local view = ui.windowSize()
+  hudPos = vec2(
+    view.x - winSize.x - INITIAL_PADDING.x,
+    view.y - winSize.y - INITIAL_PADDING.y
+  )
+end
+
+local function drawGaugeWindow(dt, winSize)
+  dt = dt or 0.016
+  local sim = ac and ac.getSim and ac.getSim()
+  if not sim then
+    ui.dwriteDrawText("Waiting for sim...", 16, vec2(16, 20), rgbm(1, 0.4, 0.4, 1))
+    return
+  end
+
+  local car = ac.getCar(sim.focusedCar)
+  if not car then
+    ui.dwriteDrawText("No car data", 16, vec2(16, 20), rgbm(1, 0.4, 0.4, 1))
+    return
+  end
+
+  local radius = math.min(winSize.x, winSize.y) * 0.45
+  local center = vec2(winSize.x * 0.5, winSize.y * 0.58)
+  drawInitialDStyleGauge(car, center, radius, dt)
+end
+
+function script.update(dt)
+  -- Reserved for future logic (input, state caching, etc.)
+end
+
+function script.drawUI(dt)
+  updateUnitPreference()
+  local winSize = WINDOW_SIZE
+  ensureHudPosition(winSize)
+
+  ui.beginTransparentWindow(WINDOW_ID, hudPos, winSize)
+    drawGaugeWindow(dt, winSize)
+  ui.endTransparentWindow()
 end
