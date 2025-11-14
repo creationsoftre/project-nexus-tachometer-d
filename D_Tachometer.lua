@@ -155,8 +155,6 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
       radius * 0.026,
       rgbm(1.0, 0.15, 0.0, 1.0)
     )
-
-  end
   end
 
 
