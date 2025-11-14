@@ -8,6 +8,11 @@ local cos = math.cos
 local tan = math.tan
 local rad = math.rad
 
+-- Override this with the absolute folder that contains D Tachometer.lua
+-- (for example "C:/Users/Administrator/Desktop/Project Nexus - Drift/apps/python/D Tachometer")
+-- when the runtime does not expose the debug library.
+local CUSTOM_APP_PATH = nil
+
 local function normalizePath(path)
   path = path or ""
   path = path:gsub("\\", "/")
@@ -38,7 +43,24 @@ local function dirname(path)
   return normalizePath(dir)
 end
 
-local script_dir = dirname(debug.getinfo(1, "S").source:sub(2))
+local function detectScriptDir()
+  if CUSTOM_APP_PATH and CUSTOM_APP_PATH ~= "" then
+    return normalizePath(CUSTOM_APP_PATH)
+  end
+  if debug and debug.getinfo then
+    local info = debug.getinfo(1, "S")
+    if info and info.source then
+      local source = info.source
+      if source:sub(1, 1) == "@" then
+        source = source:sub(2)
+      end
+      return dirname(source)
+    end
+  end
+  return normalizePath("./")
+end
+
+local script_dir = detectScriptDir()
 local app_path = script_dir
 local config_path = joinPath(app_path, "config.ini")
 local themes_root = joinPath(app_path, "themes")
