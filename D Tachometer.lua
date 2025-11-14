@@ -334,6 +334,8 @@ end
 
 local preview_path = joinPath(active_theme_dir, "preview.png")
 
+local graphics_supported = type(ac) == "table" and type(ac.newTexture) == "function"
+
 
 local app_window = nil
 local settings_window = nil
@@ -424,6 +426,9 @@ local function updateWindowSize()
 end
 
 local function loadTextures()
+  if not graphics_supported then
+    return
+  end
   background = ac.newTexture(joinPath(app_path, string.format("themes/D%d/background/background.png", theme)))
   background_pedal = ac.newTexture(joinPath(app_path, string.format("themes/D%d/background/background_pedal.png", theme)))
   drift_background = ac.newTexture(joinPath(app_path, string.format("themes/D%d/background/drift_background.png", theme)))
@@ -501,23 +506,35 @@ local function settings_window_deactivated()
 end
 
 local function scale_spinner_clicked()
+  if not graphics_supported then
+    return
+  end
   scale = ac.getValue(scale_spinner) / 100.0
   setConfigValue("scale", string.format("%.0f", ac.getValue(scale_spinner)))
   updateWindowSize()
 end
 
 local function unit_kmh_checkbox_clicked()
+  if not graphics_supported then
+    return
+  end
   unit_kmh = not unit_kmh
   setConfigValue("unit_kmh", unit_kmh and "1" or "0")
 end
 
 local function refresh_rate_checkbox_clicked()
+  if not graphics_supported then
+    return
+  end
   lower_refresh_rate = not lower_refresh_rate
   setConfigValue("lower_refresh_rate", lower_refresh_rate and "1" or "0")
   timer3 = 0
 end
 
 local function theme_spinner_clicked()
+  if not graphics_supported then
+    return
+  end
   local selected = math.floor(ac.getValue(theme_spinner))
   setConfigValue("theme", tostring(selected))
   ac.setBackgroundTexture(preview_label,
@@ -525,11 +542,17 @@ local function theme_spinner_clicked()
 end
 
 local function redLimit_offset_spinner_clicked()
+  if not graphics_supported then
+    return
+  end
   redLimit_offset = ac.getValue(redLimit_offset_spinner)
   setConfigValue("redLimit_offset", string.format("%.0f", redLimit_offset))
 end
 
 local function speedo_color_checkbox_clicked()
+  if not graphics_supported then
+    return
+  end
   fixed_speedo_color = not fixed_speedo_color
   setConfigValue("fixed_speedo_color", fixed_speedo_color and "1" or "0")
 end
@@ -540,12 +563,18 @@ local function show_drift_checkbox_clicked()
 end
 
 local function show_pedal_checkbox_clicked()
+  if not graphics_supported then
+    return
+  end
   show_pedal = not show_pedal
   setConfigValue("show_pedal", show_pedal and "1" or "0")
   updateWindowSize()
 end
 
 function acMain(ac_version)
+  if not graphics_supported then
+    return
+  end
   app_window = ac.newApp("D Tachometer")
   ac.setTitle(app_window, "")
   ac.drawBorder(app_window, 0)
@@ -657,6 +686,9 @@ function acMain(ac_version)
 end
 
 function appGL(deltaT)
+  if not graphics_supported then
+    return
+  end
   ac.glColor4f(1, 1, 1, 1)
   if drift_light_available and show_drift then
     if pedal_gauge_available and show_pedal then
@@ -922,7 +954,9 @@ function acUpdate(deltaT)
       maxRpm = tonumber(info.static.maxRpm) or maxRpm
       status = tonumber(info.graphics.status) or status
     end
-    ac.setBackgroundOpacity(app_window, 0)
+    if graphics_supported and ac.setBackgroundOpacity then
+      ac.setBackgroundOpacity(app_window, 0)
+    end
   end
 
   if timer2 > 0.1 then
