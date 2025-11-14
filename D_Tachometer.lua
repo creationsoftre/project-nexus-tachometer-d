@@ -232,7 +232,7 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   end
 
   --------------------------------------------------------
-  -- RPM needle (triangular pointer with glow)
+  -- RPM needle (long thin triangle)
   --------------------------------------------------------
   if rpmFraction > 0 then
     local angle = scalarLerp(startA, endA, rpmFraction)
@@ -241,14 +241,12 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
     local px   = -dirY
     local py   =  dirX
 
-    local tailR = radius * 0.18
-    local baseR = radius * 0.32
-    local tipR  = arcOuter * 0.99
-    local halfW = radius * 0.055
+    local tailR = radius * 0.05
+    local tipR  = arcOuter * 1.02
+    local halfW = radius * 0.03
 
-    local tip   = vec2(center.x + dirX * tipR,  center.y + dirY * tipR)
-    local base  = vec2(center.x + dirX * baseR, center.y + dirY * baseR)
-    local tail  = vec2(center.x + dirX * tailR, center.y + dirY * tailR)
+    local tip   = vec2(center.x + dirX * tipR, center.y + dirY * tipR)
+    local base  = vec2(center.x + dirX * tailR, center.y + dirY * tailR)
     local left  = vec2(base.x + px * halfW, base.y + py * halfW)
     local right = vec2(base.x - px * halfW, base.y - py * halfW)
 
@@ -256,16 +254,9 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
     ui.pathLineTo(left)
     ui.pathLineTo(tip)
     ui.pathLineTo(right)
-    ui.pathFillConvex(rgbm(1.0, 0.30, 0.15, 0.95))
+    ui.pathFillConvex(rgbm(1.0, 0.2, 0.1, 1.0))
 
-    ui.pathClear()
-    ui.pathLineTo(left)
-    ui.pathLineTo(tail)
-    ui.pathLineTo(right)
-    ui.pathFillConvex(rgbm(0.08, 0.0, 0.0, 0.75))
-
-    ui.drawLine(tail, tip, rgbm(1.0, 0.35, 0.2, 0.65), radius * 0.02)
-    ui.drawCircleFilled(tail, radius * 0.05, rgbm(0.9, 0.2, 0.1, 0.35))
+    ui.drawLine(base, tip, rgbm(1.0, 0.25, 0.15, 0.7), radius * 0.01)
   end
 
 
@@ -281,75 +272,64 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   --------------------------------------------------------
   -- Digital speed / gear cluster
   --------------------------------------------------------
-  local clusterW   = radius * 0.95
-  local clusterH   = radius * 0.32
-  local clusterY   = center.y + radius * 0.36
-  local clusterMin = vec2(center.x - clusterW / 2, clusterY)
-  local clusterMax = clusterMin + vec2(clusterW, clusterH)
-
-  -- transparent LCD background (no bezel)
-  local shadowAlpha = 0.0
-  if shadowAlpha > 0 then
-    ui.drawRectFilled(clusterMin + vec2(3, 6), clusterMax + vec2(3, 6), rgbm(0, 0, 0, shadowAlpha))
-  end
-  -- leave central area empty; only inner LCDs drawn
-
-  local lcdMin = clusterMin + vec2(6, 6)
-  local lcdSplit = lcdMin.x + (clusterW * 0.64)
-  local lcdMax = vec2(lcdSplit - 6, clusterMax.y - 10)
+  local clusterHeight = radius * 0.28
+  local clusterMin = vec2(center.x - radius * 0.65, center.y + radius * 0.38)
+  local clusterMax = clusterMin + vec2(radius * 1.30, clusterHeight)
+  local lcdMin = clusterMin
+  local lcdMax = vec2(clusterMin.x + radius * 0.95, clusterMax.y)
 
   ui.drawRectFilledMultiColor(
     lcdMin, lcdMax,
-    rgbm(0.15, 0.85, 0.95, 0.65),
-    rgbm(0.20, 1.00, 1.00, 0.85),
-    rgbm(0.00, 0.30, 0.40, 0.95),
-    rgbm(0.00, 0.25, 0.35, 0.92)
+    rgbm(0.12, 0.80, 0.90, 0.75),
+    rgbm(0.25, 0.95, 1.00, 0.95),
+    rgbm(0.00, 0.28, 0.38, 0.95),
+    rgbm(0.00, 0.23, 0.33, 0.92)
   )
-  ui.drawRect(lcdMin, lcdMax, rgbm(0, 0, 0, 0.9), 2.2)
+  ui.drawRect(lcdMin, lcdMax, rgbm(0, 0, 0, 1.0), 2.5)
 
   local baseSpeed   = getCarSpeedKmh(car)
   local displaySpd  = math.abs(isKmh and baseSpeed or baseSpeed * KMH_TO_MPH)
   local speedText   = string.format("%d", math.floor(displaySpd + 0.5))
   local gearText    = formatGearText(car.gear)
 
-  local speedSize = radius * 0.26
+  local speedSize = radius * 0.22
   local speedW    = ui.measureDWriteText(speedText, speedSize).x
   local speedPos  = vec2(
-    lcdMin.x + (lcdMax.x - lcdMin.x) * 0.35 - speedW / 2,
-    lcdMin.y + radius * 0.02
+    lcdMin.x + (lcdMax.x - lcdMin.x) * 0.25 - speedW / 2,
+    lcdMin.y + (lcdMax.y - lcdMin.y) * 0.15
   )
   ui.dwriteDrawText(speedText, speedSize, speedPos, rgbm(0.90, 0.98, 1.0, 0.95))
 
   local unitText  = isKmh and "km/h" or "mph"
-  local unitSize  = radius * 0.12
+  local unitSize  = radius * 0.10
   local unitW     = ui.measureDWriteText(unitText, unitSize).x
   local unitPos   = vec2(
-    lcdMin.x + (lcdMax.x - lcdMin.x) * 0.70 - unitW / 2,
-    lcdMax.y - unitSize * 0.4
+    lcdMin.x + (lcdMax.x - lcdMin.x) * 0.25 - unitW / 2,
+    lcdMax.y - unitSize * 1.2
   )
   ui.dwriteDrawText(unitText, unitSize, unitPos, rgbm(0.92, 0.98, 1.0, 0.95))
 
-  local gearBoxMin = vec2(lcdSplit, lcdMin.y)
-  local gearBoxMax = vec2(clusterMax.x - 6, lcdMax.y)
+  local gearBoxMin = vec2(lcdMax.x + radius * 0.02, lcdMin.y)
+  local gearBoxMax = vec2(clusterMax.x, lcdMax.y)
   ui.drawRectFilled(gearBoxMin + vec2(2, 4), gearBoxMax + vec2(4, 6), rgbm(0, 0, 0, 0.4))
   ui.drawRectFilled(gearBoxMin, gearBoxMax, rgbm(0, 0, 0, 0.85))
   ui.drawRectFilledMultiColor(
     gearBoxMin + vec2(3, 3),
     gearBoxMax - vec2(3, 3),
-    rgbm(0.15, 0.85, 0.95, 0.65),
-    rgbm(0.25, 1.0, 1.0, 0.85),
+    rgbm(0.12, 0.80, 0.90, 0.65),
+    rgbm(0.22, 0.98, 1.0, 0.85),
     rgbm(0.00, 0.30, 0.45, 0.95),
     rgbm(0.00, 0.20, 0.35, 0.92)
   )
   ui.drawRect(gearBoxMin, gearBoxMax, rgbm(0, 0, 0, 1.0), 2.0)
 
-  local gearSize = radius * 0.22
+  local gearSize = radius * 0.20
   local gearW    = ui.measureDWriteText(gearText, gearSize).x
   local gearPos  = vec2(
     gearBoxMin.x + (gearBoxMax.x - gearBoxMin.x) / 2 - gearW / 2,
-    gearBoxMin.y + radius * 0.08
+    gearBoxMin.y + (gearBoxMax.y - gearBoxMin.y) * 0.15
   )
-  ui.dwriteDrawText(gearText, gearSize * 1.05, gearPos, rgbm(0.92, 0.98, 1.0, 0.95))
+  ui.dwriteDrawText(gearText, gearSize, gearPos, rgbm(0.92, 0.98, 1.0, 0.95))
 
   local mtText = "MT"
   local mtSize = radius * 0.13
