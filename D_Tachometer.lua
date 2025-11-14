@@ -283,12 +283,6 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   local rpmPos   = vec2(center.x - rpmWidth / 2, center.y - radius * 0.55)
   ui.dwriteDrawText(rpmLabel, rpmSize, rpmPos, rgbm(0.9, 0.95, 1.0, 0.9))
 
-  local brandText = "Initial D"
-  local brandSize = radius * 0.11
-  local brandWidth = ui.measureDWriteText(brandText, brandSize).x
-  local brandPos = vec2(center.x - brandWidth / 2, center.y - radius * 0.35)
-  ui.dwriteDrawText(brandText, brandSize, brandPos, rgbm(0.9, 0.9, 0.9, 0.9))
-
   --------------------------------------------------------
   -- Digital speed / gear cluster
   --------------------------------------------------------
@@ -298,8 +292,12 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   local clusterMin = vec2(center.x - clusterW / 2, clusterY)
   local clusterMax = clusterMin + vec2(clusterW, clusterH)
 
-  ui.drawRectFilled(clusterMin + vec2(3, 6), clusterMax + vec2(3, 6), rgbm(0, 0, 0, 0.6))
-  ui.drawRectFilled(clusterMin, clusterMax, rgbm(0, 0, 0, 0.95))
+  -- transparent LCD background (no bezel)
+  local shadowAlpha = 0.0
+  if shadowAlpha > 0 then
+    ui.drawRectFilled(clusterMin + vec2(3, 6), clusterMax + vec2(3, 6), rgbm(0, 0, 0, shadowAlpha))
+  end
+  -- leave central area empty; only inner LCDs drawn
 
   local lcdMin = clusterMin + vec2(6, 6)
   local lcdSplit = lcdMin.x + (clusterW * 0.62)
@@ -332,7 +330,7 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   local unitW     = ui.measureDWriteText(unitText, unitSize).x
   local unitPos   = vec2(
     lcdMin.x + (lcdMax.x - lcdMin.x) * 0.70 - unitW / 2,
-    lcdMax.y - unitSize * 1.1
+    lcdMax.y - unitSize * 0.4
   )
   ui.dwriteDrawText(unitText, unitSize, unitPos, rgbm(0.92, 0.98, 1.0, 0.95))
 
@@ -354,7 +352,7 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   local gearW    = ui.measureDWriteText(gearText, gearSize).x
   local gearPos  = vec2(
     gearBoxMin.x + (gearBoxMax.x - gearBoxMin.x) / 2 - gearW / 2,
-    gearBoxMin.y + radius * 0.04
+    gearBoxMin.y + radius * 0.08
   )
   ui.dwriteDrawText(gearText, gearSize * 1.05, gearPos, rgbm(0.92, 0.98, 1.0, 0.95))
 
@@ -363,7 +361,7 @@ local function drawInitialDStyleGauge(car, center, radius, dt)
   local mtW    = ui.measureDWriteText(mtText, mtSize).x
   local mtPos  = vec2(
     gearBoxMin.x + (gearBoxMax.x - gearBoxMin.x) / 2 - mtW / 2,
-    gearBoxMin.y + (gearBoxMax.y - gearBoxMin.y) * 0.55
+    gearBoxMax.y - mtSize * 1.2
   )
   ui.dwriteDrawText(mtText, mtSize, mtPos, rgbm(0.92, 0.98, 1.0, 0.9))
 
