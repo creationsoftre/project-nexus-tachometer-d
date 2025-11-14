@@ -1,13 +1,8 @@
 --!SERVER_SCRIPT
--- Project Nexus - Initial D Tachometer (D3 theme)
--- Standalone HUD script, uses textures from:
---   themes/D3/background/background.png
---   themes/D3/speed_digits/speed_digits_0.png ... 9
---   themes/D3/speed_unit/kmh.png, mph.png
---   themes/D3/gears/gear_0.png ... gear_10.png
+-- Project Nexus - Initial D Inspired Tachometer (vector-only)
 
 ------------------------------------------------------------
--- Persistent settings (own namespace)
+-- Persistent settings
 ------------------------------------------------------------
 
 local STORAGE_UNIT  = ac.storage({ group = 'PN_D_Tacho', name = 'UnitKmh', value = true })
@@ -17,46 +12,25 @@ local isKmh  = STORAGE_UNIT.value and true or false
 local Scale  = STORAGE_SCALE.value or 1.0
 
 ------------------------------------------------------------
--- Theme root (matches your GitHub repo structure)
-------------------------------------------------------------
-
--- We hard-select D3 here because that’s the theme you pointed me to:
--- https://github.com/creationsoftre/project-nexus-tachometer-d/blob/main/themes/D3/background/background.png
-local THEME_ID   = 3
-local THEME_ROOT = string.format('themes/D%d/', THEME_ID)
-
-local TEX_BACKGROUND = THEME_ROOT .. 'background/background.png'
-local TEX_KMH        = THEME_ROOT .. 'speed_unit/kmh.png'
-local TEX_MPH        = THEME_ROOT .. 'speed_unit/mph.png'
-
-local speedDigitTex = {}
-for i = 0, 9 do
-  speedDigitTex[i] = string.format('%sspeed_digits/speed_digits_%d.png', THEME_ROOT, i)
-end
-
-local gearTex = {}
-for i = 0, 10 do
-  gearTex[i] = string.format('%sgears/gear_%d.png', THEME_ROOT, i)
-end
-
-------------------------------------------------------------
 -- Constants & runtime state
 ------------------------------------------------------------
 
 local KMH_TO_MPH    = 0.621371
 local KM_TO_MI      = 0.621371
-local HUD_RADIUS    = 150          -- base logical radius before scaling
+local HUD_RADIUS    = 150.0  -- base logical radius
 
-local winPos        = nil          -- top-left of HUD window
+local winPos        = nil
 local draggingHud   = false
 
-local rpm        = 0
-local speedKmh   = 0
-local gear       = 0
-local odometerKm = 0
+local rpm           = 0
+local speedKmh      = 0
+local gear          = 0
+local odometerKm    = 0
 
 local colors = {
   white      = rgbm(1, 1, 1, 1),
+  faintWhite = rgbm(1, 1, 1, 0.15),
+  arcBase    = rgbm(0.10, 0.10, 0.10, 0.85),
   pillBg     = rgbm(0, 0, 0, 0.55),
   pillBorder = rgbm(1, 1, 1, 0.8),
   handleBg   = rgbm(0, 0, 0, 0.65),
@@ -64,8 +38,18 @@ local colors = {
 }
 
 ------------------------------------------------------------
--- Helpers
+-- Small helpers
 ------------------------------------------------------------
+
+local function clamp(x, a, b)
+  if x < a then return a end
+  if x > b then return b end
+  return x
+end
+
+local function lerp(a, b, t)
+  return a + (b - a) * t
+end
 
 local function getCar()
   local sim = ac.getSim()
@@ -79,130 +63,142 @@ local function getSpeed()
   return math.floor(v + 0.5)
 end
 
-local function splitDigits(n)
-  local s = tostring(math.floor(math.abs(n)))
-  local t = {}
-  for i = 1, #s do
-    t[i] = tonumber(s:sub(i, i))
-  end
-  return t
-end
-
 ------------------------------------------------------------
--- Initial-D style gauge drawing using D3 textures
+-- Initial D–style vector gauge
 ------------------------------------------------------------
 
-local function drawInitialDGauge(car, center, radius, dt)
+local function drawInitialDStyledGauge(car, center, radius, dt)
   dt = dt or 0.016
 
   --------------------------------------------------------
-  -- Background texture (full Initial D gauge)
+  -- Base dual-ring arc, like the Initial D themes
   --------------------------------------------------------
-  local bgSize = vec2(radius * 2.4, radius * 2.4)
-  local bgPos  = center - bgSize / 2
 
-  ui.setCursor(bgPos)
-  ui.image(TEX_BACKGROUND, bgSize, colors.white, ui.ImageFit.Fit)
+  local outerR = radius * 1.02
+  local innerR = radius * 0.78
+  local innerInnerR = radius * 0.60
+
+  local startA = math.rad(-210)
+  local endA   = math.rad(  30)
+
+  -- Outer faint ring
+  ui.pathClear()
+  ui.pathArcTo(center, outerR, startA, endA, 80)
+  ui.pathStroke(colors.arcBase, false, 8.0)
+
+  -- Second faint inner ring
+  ui.pathClear()
+  ui.pathArcTo(center, innerInnerR, startA, endA, 80)
+  ui.pathStroke(colors.faintWhite, false, 2.0)
 
   --------------------------------------------------------
-  -- RPM overlay arc (subtle, on top of background)
+  -- RPM fill arc (white -> yellow -> red)
   --------------------------------------------------------
+
   local maxRpm = car.rpmLimiter
   if maxRpm <= 0 then maxRpm = 8000 end
-  local rpmFraction = math.clamp(rpm / (maxRpm * 1.05), 0, 1)
+  local rpmFraction = clamp(rpm / (maxRpm * 1.05), 0, 1)
 
-  local arcRadiusOuter = radius * 0.96
-  local arcRadiusInner = radius * 0.81
-  local startAngle     = math.rad(-210)
-  local endAngle       = math.rad(  30)
+  local filledEnd = lerp(startA, endA, rpmFraction)
 
-  -- Soft gray arc as base
-  ui.pathClear()
-  ui.pathArcTo(center, arcRadiusOuter, startAngle, endAngle, 64)
-  ui.pathArcTo(center, arcRadiusInner, endAngle, startAngle, 64)
-  ui.pathStroke(rgbm(0.12, 0.12, 0.12, 0.80), true, 1.0)
-
-  -- Filled portion for current RPM
-  local filledEnd = math.lerp(startAngle, endAngle, rpmFraction)
-  local rpmColor  = rgbm(1.0, 1.0, 1.0, 0.98)
+  local rpmColor = rgbm(1, 1, 1, 0.95)           -- white
   if rpmFraction > 0.80 then
-    rpmColor = rgbm(1.0, 0.9, 0.1, 1.0)
+    rpmColor = rgbm(1.0, 0.9, 0.1, 1.0)         -- yellow
   end
   if rpmFraction > 0.95 then
-    rpmColor = rgbm(1.0, 0.25, 0.25, 1.0)
+    rpmColor = rgbm(1.0, 0.25, 0.25, 1.0)       -- red
   end
 
   ui.pathClear()
-  ui.pathArcTo(center, arcRadiusOuter, startAngle, filledEnd, 64)
-  ui.pathArcTo(center, arcRadiusInner, filledEnd, startAngle, 64)
-  ui.pathStroke(rpmColor, true, 1.0)
+  ui.pathArcTo(center, outerR, startA, filledEnd, 80)
+  ui.pathStroke(rpmColor, false, 10.0)
 
   --------------------------------------------------------
-  -- SPEED (Initial D digits)
+  -- Small tick marks along the arc (Initial D feel)
   --------------------------------------------------------
-  local spd    = getSpeed()
-  local digits = splitDigits(spd)
 
-  -- Positioning roughly matched to your D themes:
-  local digitW = radius * 0.23
-  local digitH = radius * 0.32
-  local gap    = radius * 0.03
+  local ticks = 12
+  for i = 0, ticks do
+    local t = i / ticks
+    local a = lerp(startA, endA, t)
+    local sR = innerInnerR * 0.99
+    local eR = innerInnerR * 1.04
 
-  local totalW = (#digits) * digitW + (#digits - 1) * gap
-  local startX = center.x - totalW / 2
-  local y      = center.y + radius * 0.30
+    local sx = center.x + math.cos(a) * sR
+    local sy = center.y + math.sin(a) * sR
+    local ex = center.x + math.cos(a) * eR
+    local ey = center.y + math.sin(a) * eR
 
-  for i = 1, #digits do
-    local d   = digits[i] or 0
-    local pos = vec2(startX + (i - 1) * (digitW + gap), y)
-    ui.setCursor(pos)
-    ui.image(speedDigitTex[d], vec2(digitW, digitH), colors.white, ui.ImageFit.Fit)
+    ui.drawLine(vec2(sx, sy), vec2(ex, ey), colors.faintWhite, (i % 3 == 0) and 2.0 or 1.0)
   end
 
   --------------------------------------------------------
-  -- Speed unit (km/h or mph) – texture from theme
+  -- Digital speed in the center
   --------------------------------------------------------
-  local unitTex  = isKmh and TEX_KMH or TEX_MPH
-  local unitSize = vec2(radius * 0.55, radius * 0.14)
-  local unitPos  = vec2(center.x - unitSize.x / 2, y + digitH + radius * 0.03)
 
-  ui.setCursor(unitPos)
-  ui.image(unitTex, unitSize, colors.white, ui.ImageFit.Fit)
+  local spd       = getSpeed()
+  local speedText = string.format('%d', spd)
 
-  --------------------------------------------------------
-  -- Gear (gear_0..10 textures)
-  --------------------------------------------------------
-  local gIdx = gear
-  if gIdx < 0 then gIdx = 0 end
-  if gIdx > 10 then gIdx = 10 end
+  local speedSize = radius * 0.40
+  local speedW    = ui.measureDWriteText(speedText, speedSize).x
+  local speedPos  = vec2(center.x - speedW / 2, center.y - radius * 0.10)
 
-  local gSize = vec2(radius * 0.60, radius * 0.35)
-  local gPos  = vec2(center.x - gSize.x / 2, center.y - radius * 0.15)
+  ui.dwriteDrawText(speedText, speedSize, speedPos, colors.white)
 
-  ui.setCursor(gPos)
-  ui.image(gearTex[gIdx], gSize, colors.white, ui.ImageFit.Fit)
+  -- Speed unit below (km/h or mph)
+  local unitText  = isKmh and 'km/h' or 'mph'
+  local unitSize  = radius * 0.13
+  local unitW     = ui.measureDWriteText(unitText, unitSize).x
+  local unitPos   = vec2(center.x - unitW / 2, center.y + radius * 0.16)
+
+  ui.dwriteDrawText(unitText, unitSize, unitPos, colors.white)
 
   --------------------------------------------------------
-  -- Odometer text (bottom center, km or mi)
+  -- Gear (large letter / number at bottom of arc)
   --------------------------------------------------------
+
+  local gearText
+  if gear == 0 then
+    gearText = 'N'
+  elseif gear == -1 then
+    gearText = 'R'
+  else
+    gearText = tostring(gear)
+  end
+
+  local gearSize = radius * 0.30
+  local gearW    = ui.measureDWriteText(gearText, gearSize).x
+  local gearPos  = vec2(center.x - gearW / 2, center.y + radius * 0.36)
+
+  ui.dwriteDrawText(gearText, gearSize, gearPos, colors.white)
+
+  --------------------------------------------------------
+  -- Odometer at very bottom (like Initial D: six digits)
+  --------------------------------------------------------
+
   local dist = odometerKm
   if not isKmh then dist = dist * KM_TO_MI end
 
-  local odoText = string.format('%06d %s',
-    math.floor(dist),
-    isKmh and 'km' or 'mi'
-  )
+  local odoText = string.format('%06d %s', math.floor(dist), isKmh and 'km' or 'mi')
+  local odoSize = radius * 0.12
+  local odoW    = ui.measureDWriteText(odoText, odoSize).x
+  local odoPos  = vec2(center.x - odoW / 2, center.y + radius * 0.60)
 
-  ui.dwriteDrawText(
-    odoText,
-    radius * 0.10,
-    vec2(center.x - radius * 0.35, center.y + radius * 0.80),
-    colors.white
-  )
+  ui.dwriteDrawText(odoText, odoSize, odoPos, colors.white)
+
+  --------------------------------------------------------
+  -- Small "x1000 rpm" label in the inner right
+  --------------------------------------------------------
+
+  local rpmLabel = 'x1000 rpm'
+  local labelSize = radius * 0.12
+  local labelPos  = vec2(center.x + radius * 0.45, center.y - radius * 0.05)
+
+  ui.dwriteDrawText(rpmLabel, labelSize, labelPos, colors.faintWhite)
 end
 
 ------------------------------------------------------------
--- Window render + input (KMH/MPH pill + drag handle)
+-- Window + input (KMH/MPH pill + drag handle)
 ------------------------------------------------------------
 
 local function windowMain(dt, winSize)
@@ -216,6 +212,7 @@ local function windowMain(dt, winSize)
   ------------------------------------------------------
   -- KMH / MPH toggle pill (top-left)
   ------------------------------------------------------
+
   local pillPos  = vec2(10, 10)
   local pillSize = vec2(90, 26)
   local pillEnd  = vec2(pillPos.x + pillSize.x, pillPos.y + pillSize.y)
@@ -253,8 +250,9 @@ local function windowMain(dt, winSize)
   end
 
   ------------------------------------------------------
-  -- Drag handle (top-right)
+  -- Drag handle (top-right) – Initial D style move icon
   ------------------------------------------------------
+
   local dragSize = 22
   local dragPos  = vec2(winSize.x - dragSize - 10, 10)
   local dragMin  = dragPos
@@ -288,10 +286,11 @@ local function windowMain(dt, winSize)
   end
 
   ------------------------------------------------------
-  -- Draw the themed gauge
+  -- Draw the main gauge
   ------------------------------------------------------
+
   local center = vec2(winSize.x / 2, winSize.y / 2)
-  drawInitialDGauge(car, center, HUD_RADIUS * Scale, dt)
+  drawInitialDStyledGauge(car, center, HUD_RADIUS * Scale, dt)
 end
 
 ------------------------------------------------------------
@@ -313,9 +312,10 @@ function script.drawUI(dt)
 
   local full    = ui.windowSize()
   local radius  = HUD_RADIUS * Scale
-  local winSize = vec2(radius * 2.8, radius * 2.8)
+  local winSize = vec2(radius * 2.6, radius * 2.6)
 
   if not winPos then
+    -- default bottom-right placement
     winPos = vec2(
       full.x - winSize.x - 30,
       full.y - winSize.y - 30
