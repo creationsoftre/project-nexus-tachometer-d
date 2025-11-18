@@ -68,6 +68,9 @@ local carRPM      = 0
 local carSpeedKmh = 0
 local carGear     = 0
 
+local defaultMaxRpm = dial.maxValue * 1000
+local tachMaxRpm    = defaultMaxRpm
+
 ------------------------------------------------------------
 -- Helpers
 ------------------------------------------------------------
@@ -126,6 +129,49 @@ local function pointInCircle(pos, center, radius)
   local dx = pos.x - center.x
   local dy = pos.y - center.y
   return dx * dx + dy * dy <= radius * radius
+end
+
+local function sanitizeRpmValue(value)
+  local rpm = tonumber(value)
+  if rpm and rpm > 0 then
+    return rpm
+  end
+  return nil
+end
+
+local function resolveCarMaxRpm(car, carIndex)
+  if type(car) ~= "table" then return nil end
+
+  local carFields = { "rpmLimiter", "revLimiterRpm", "maxRpm", "engineMaxRpm", "redlineRPM" }
+  for _, field in ipairs(carFields) do
+    local rpm = sanitizeRpmValue(car[field])
+    if rpm then
+      return rpm
+    end
+  end
+
+  local physicsGetter = ac and ac.getCarPhysics
+  if physicsGetter then
+    local physics = physicsGetter(carIndex or car.index or 0)
+    if physics then
+      local physicsFields = { "rpmLimiter", "maxRpm", "engineMaxRpm" }
+      for _, field in ipairs(physicsFields) do
+        local rpm = sanitizeRpmValue(physics[field])
+        if rpm then
+          return rpm
+        end
+      end
+    end
+  end
+
+  return nil
+end
+
+local function currentMaxRpm()
+  if tachMaxRpm and tachMaxRpm > 0 then
+    return tachMaxRpm
+  end
+  return defaultMaxRpm
 end
 
 local function clampPosition(pos, win, size)
@@ -217,6 +263,15 @@ function script.update(dt)
   carRPM      = car.rpm or 0
   carSpeedKmh = car.speedKmh or 0
   carGear     = car.gear or 0
+
+  local limiter = resolveCarMaxRpm(car, 0)
+  if limiter then
+    tachMaxRpm = limiter
+  elseif carRPM > tachMaxRpm then
+    tachMaxRpm = carRPM
+  elseif tachMaxRpm <= 0 then
+    tachMaxRpm = defaultMaxRpm
+  end
 end
 
 ------------------------------------------------------------
@@ -271,22 +326,34 @@ end
 
 local function drawTicks(center, radius)
   local subdivisions = dial.subdivisions
-  local totalSteps = dial.maxValue * subdivisions
+  local maxRpm = currentMaxRpm()
+  if maxRpm <= 0 then return end
+
+  local stepRpm = 1000 / subdivisions
+  local totalSteps = math.max(1, math.ceil(maxRpm / stepRpm))
+
+  local function formatTickLabel(value)
+    local rounded = math.floor(value + 0.5)
+    if math.abs(value - rounded) < 1e-3 then
+      return string.format("%d", rounded)
+    end
+    return string.format("%.1f", value)
+  end
 
   for i = 0, totalSteps do
-    local value = i / subdivisions
-    local ratio = value / dial.maxValue
+    local rpmValue = math.min(i * stepRpm, maxRpm)
+    local ratio = rpmValue / maxRpm
     local angle = angleForRatio(ratio)
     local c, s = math.cos(angle), sinY(angle)
-    local isMajor = (i % subdivisions == 0)
+    local isMajor = (i % subdivisions == 0) or (i == totalSteps)
 
     local inner = radius * (isMajor and 0.66 or 0.74)
     local outer = radius * (isMajor and 0.97 or 0.89)
     local thickness = isMajor and 3.0 or 1.4
 
     local color = theme.ticks
-    if value >= dial.maxValue - 1.2 then
-      color = (value >= dial.maxValue - 0.3) and theme.tickHot or theme.tickWarn
+    if rpmValue >= maxRpm - 1200 then
+      color = (rpmValue >= maxRpm - 300) and theme.tickHot or theme.tickWarn
     end
 
     ui.drawLine(
@@ -297,7 +364,7 @@ local function drawTicks(center, radius)
     )
 
     if isMajor then
-      local label = string.format("%d", value)
+      local label = formatTickLabel(rpmValue / 1000)
       local labelSize = 18 * SCALE
       local labelPos = vec2(
         center.x + c * (radius * 0.60),
@@ -315,7 +382,8 @@ local function drawTicks(center, radius)
 end
 
 local function drawNeedle(center, radius)
-  local rpmMax   = dial.maxValue * 1000
+  local rpmMax   = currentMaxRpm()
+  if rpmMax <= 0 then return end
   local rpmValue = clamp(carRPM, 0, rpmMax)
   local ratio    = rpmValue / rpmMax
   local angle    = angleForRatio(ratio)
