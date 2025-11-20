@@ -133,7 +133,7 @@ end
 
 local function sanitizeRpmValue(value)
   local rpm = tonumber(value)
-  if rpm and rpm > 0 then
+  if rpm and rpm > 0 and rpm < 20000 then
     return rpm
   end
   return nil
@@ -144,27 +144,36 @@ local function normalizeRpmToHundred(value)
   return math.floor((value + 50) / 100) * 100
 end
 
+local function safeRead(obj, field)
+  local ok, value = pcall(function() return obj[field] end)
+  if ok then return value end
+  return nil
+end
+
 local function resolveCarMaxRpm(car, carIndex)
   if not car then return nil end
 
+  local idx = carIndex
+  if idx == nil then
+    idx = safeRead(car, "index") or 0
+  end
+
   local carFields = { "rpmLimiter", "revLimiterRpm", "maxRpm", "engineMaxRpm", "redlineRPM" }
   for _, field in ipairs(carFields) do
-    local rpm = sanitizeRpmValue(car[field])
+    local rpm = sanitizeRpmValue(safeRead(car, field))
     if rpm then
       return rpm
     end
   end
 
   local physicsGetter = ac and ac.getCarPhysics
-  if physicsGetter then
-    local physics = physicsGetter(carIndex or car.index or 0)
-    if physics then
-      local physicsFields = { "rpmLimiter", "maxRpm", "engineMaxRpm" }
-      for _, field in ipairs(physicsFields) do
-        local rpm = sanitizeRpmValue(physics[field])
-        if rpm then
-          return rpm
-        end
+  local physics = physicsGetter and physicsGetter(idx)
+  if physics then
+    local physicsFields = { "rpmLimiter", "maxRpm", "engineMaxRpm" }
+    for _, field in ipairs(physicsFields) do
+      local rpm = sanitizeRpmValue(safeRead(physics, field))
+      if rpm then
+        return rpm
       end
     end
   end
