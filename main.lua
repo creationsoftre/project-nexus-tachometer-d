@@ -69,6 +69,8 @@ local carSpeedKmh = 0
 local carGear     = 0
 
 local defaultMaxRpm = dial.maxValue * 1000
+local minAllowedMax = 4000
+local maxAllowedMax = 16000
 local tachMaxRpm    = defaultMaxRpm
 
 ------------------------------------------------------------
@@ -189,6 +191,25 @@ local function resolveCarMaxRpmSafe(car, carIndex)
   return sanitizeRpmValue(rpm)
 end
 
+local function chooseMaxRpm(car, carIndex)
+  local limiter = resolveCarMaxRpmSafe(car, carIndex)
+  local candidate = limiter or nil
+
+  -- fall back to observed rpm if we have exceeded our current scale
+  if not candidate and carRPM > tachMaxRpm then
+    candidate = carRPM
+  end
+
+  if not candidate then
+    return nil
+  end
+
+  -- normalize and clamp so bad values do not break the UI
+  candidate = normalizeRpmToHundred(candidate)
+  candidate = clamp(candidate, minAllowedMax, maxAllowedMax)
+  return candidate
+end
+
 local function currentMaxRpm()
   if tachMaxRpm and tachMaxRpm > 0 then
     return tachMaxRpm
@@ -290,11 +311,9 @@ function script.update(dt)
   carSpeedKmh = car.speedKmh or 0
   carGear     = car.gear or 0
 
-  local limiter = resolveCarMaxRpmSafe(car, 0)
-  if limiter then
-    tachMaxRpm = limiter
-  elseif carRPM > tachMaxRpm then
-    tachMaxRpm = normalizeRpmToHundred(carRPM)
+  local newMax = chooseMaxRpm(car, 0)
+  if newMax then
+    tachMaxRpm = newMax
   elseif tachMaxRpm <= 0 then
     tachMaxRpm = defaultMaxRpm
   end
