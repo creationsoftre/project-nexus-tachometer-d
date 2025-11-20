@@ -378,12 +378,11 @@ local function drawTicks(center, radius)
   local totalSteps = math.max(1, math.ceil(maxRpm / stepRpm))
 
   local function formatTickLabel(value)
-    local rounded = math.floor(value + 0.5)
-    if math.abs(value - rounded) < 1e-3 then
-      return string.format("%d", rounded)
-    end
-    return string.format("%.1f", value)
+    -- Force whole-number labels to avoid decimals like 8.2 on the tach face
+    return string.format("%d", math.floor(value + 1e-3))
   end
+
+  local lastLabel = nil
 
   for i = 0, totalSteps do
     local rpmValue = math.min(i * stepRpm, maxRpm)
@@ -410,18 +409,21 @@ local function drawTicks(center, radius)
 
     if isMajor then
       local label = formatTickLabel(rpmValue / 1000)
-      local labelSize = 18 * SCALE
-      local labelPos = vec2(
-        center.x + c * (radius * 0.60),
-        center.y + s * (radius * 0.60)
-      )
-      local labelMeasure = ui.measureDWriteText(label, labelSize)
-      ui.dwriteDrawText(
-        label,
-        labelSize,
-        vec2(labelPos.x - labelMeasure.x / 2, labelPos.y - labelMeasure.y / 2),
-        theme.labelText
-      )
+      if label ~= lastLabel then
+        lastLabel = label
+        local labelSize = 18 * SCALE
+        local labelPos = vec2(
+          center.x + c * (radius * 0.60),
+          center.y + s * (radius * 0.60)
+        )
+        local labelMeasure = ui.measureDWriteText(label, labelSize)
+        ui.dwriteDrawText(
+          label,
+          labelSize,
+          vec2(labelPos.x - labelMeasure.x / 2, labelPos.y - labelMeasure.y / 2),
+          theme.labelText
+        )
+      end
     end
   end
 end
