@@ -139,8 +139,13 @@ local function sanitizeRpmValue(value)
   return nil
 end
 
+local function normalizeRpmToHundred(value)
+  if not value then return nil end
+  return math.floor((value + 50) / 100) * 100
+end
+
 local function resolveCarMaxRpm(car, carIndex)
-  if type(car) ~= "table" then return nil end
+  if not car then return nil end
 
   local carFields = { "rpmLimiter", "revLimiterRpm", "maxRpm", "engineMaxRpm", "redlineRPM" }
   for _, field in ipairs(carFields) do
@@ -268,7 +273,7 @@ function script.update(dt)
   if limiter then
     tachMaxRpm = limiter
   elseif carRPM > tachMaxRpm then
-    tachMaxRpm = carRPM
+    tachMaxRpm = normalizeRpmToHundred(carRPM)
   elseif tachMaxRpm <= 0 then
     tachMaxRpm = defaultMaxRpm
   end
