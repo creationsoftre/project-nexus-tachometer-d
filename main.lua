@@ -39,7 +39,7 @@ dial.stepRad  = dial.sweepRad / dial.maxValue
 local settings = {
   position = nil,
   dragActive = false,
-  dragOffset = vec2(0, 0),
+  dragOffset = nil,
   useMph = false,
 }
 
@@ -181,6 +181,14 @@ local function resolveCarMaxRpm(car, carIndex)
   return nil
 end
 
+local function resolveCarMaxRpmSafe(car, carIndex)
+  local ok, rpm = pcall(resolveCarMaxRpm, car, carIndex)
+  if not ok then
+    return nil
+  end
+  return sanitizeRpmValue(rpm)
+end
+
 local function currentMaxRpm()
   if tachMaxRpm and tachMaxRpm > 0 then
     return tachMaxRpm
@@ -198,6 +206,10 @@ local function clampPosition(pos, win, size)
 end
 
 local function resolveCardMin(win, size)
+  if not settings.dragOffset then
+    settings.dragOffset = vec2(0, 0)
+  end
+
   if not settings.position then
     settings.position = vec2(win.x - size.x - MARGIN_X, win.y - size.y - MARGIN_Y)
   end
@@ -278,7 +290,7 @@ function script.update(dt)
   carSpeedKmh = car.speedKmh or 0
   carGear     = car.gear or 0
 
-  local limiter = resolveCarMaxRpm(car, 0)
+  local limiter = resolveCarMaxRpmSafe(car, 0)
   if limiter then
     tachMaxRpm = limiter
   elseif carRPM > tachMaxRpm then
