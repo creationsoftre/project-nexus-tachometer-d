@@ -54,10 +54,9 @@ local theme = {
   speedBorder= rgbm(1.0, 1.0, 1.0, 0.9),
   gearText   = rgbm(1.00, 0.75, 0.30, 1.0),
   labelText  = rgbm(0.90, 0.90, 0.90, 0.95),
-  assistOn   = rgbm(0.24, 0.62, 0.95, 1.0),
-  assistOff  = rgbm(0.90, 0.26, 0.20, 1.0),
-  assistTextOn  = rgbm(0.06, 0.08, 0.10, 0.95),
-  assistTextOff = rgbm(1.00, 0.95, 0.92, 0.95),
+  assistBg      = rgbm(0.16, 0.16, 0.16, 0.92),
+  assistTextOn  = rgbm(0.24, 0.62, 0.95, 1.0),
+  assistTextOff = rgbm(0.95, 0.34, 0.26, 1.0),
   tachOuter  = rgbm(0.03, 0.03, 0.03, 0.92),
   tachInner  = rgbm(0.01, 0.01, 0.01, 0.96),
   ringDim    = rgbm(1.0, 1.0, 1.0, 0.12),
@@ -529,8 +528,7 @@ local function drawAssistBadge(cardMin, scale, label, active, index)
   local btnMax = btnMin + vec2(cfg.w * scale, cfg.h * scale)
   local rounding = cfg.h * scale / 2
 
-  local bg = active and theme.assistOn or theme.assistOff
-  ui.drawRectFilled(btnMin, btnMax, bg, rounding)
+  ui.drawRectFilled(btnMin, btnMax, theme.assistBg, rounding)
 
   local textSize = 15 * scale
   local text = ui.measureDWriteText(label, textSize)
