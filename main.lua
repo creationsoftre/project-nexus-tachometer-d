@@ -71,8 +71,8 @@ local theme = {
 local carRPM      = 0
 local carSpeedKmh = 0
 local carGear     = 0
-local absEnabled  = false
-local tcEnabled   = false
+local absEnabled  = nil
+local tcEnabled   = nil
 
 local defaultMaxRpm = dial.maxValue * 1000
 local minAllowedMax = 4000
@@ -270,14 +270,41 @@ local function readAssistFields(source, fields)
   return nil
 end
 
-local absFields = { "abs", "absEnabled", "isAbsEnabled", "absOn", "absActive", "absState", "antiLock", "antilock", "antiLockBrakes", "antiLockBraking" }
-local tcFields  = { "tc", "tcEnabled", "isTcEnabled", "tcOn", "tcActive", "tcState", "tractionControl", "tractionControlEnabled", "tractionControlActive" }
+local absFields = {
+  "abs", "absEnabled", "isAbsEnabled", "absOn", "absActive", "absState",
+  "antiLock", "antilock", "antiLockBrakes", "antiLockBraking",
+  "absAvailable", "hasABS", "hasAbs", "absLevel", "absInAction"
+}
+
+local tcFields  = {
+  "tc", "tcEnabled", "isTcEnabled", "tcOn", "tcActive", "tcState",
+  "tractionControl", "tractionControlEnabled", "tractionControlActive",
+  "tcInAction", "tcLevel", "hasTC", "hasTc"
+}
+
+local function resolveAssistFromSim(name)
+  if not ac or not ac.getSim then return nil end
+  local ok, sim = pcall(ac.getSim)
+  if not ok or not sim then return nil end
+
+  local direct = interpretAssistValue(sim[name])
+  if direct ~= nil then return direct end
+
+  local assists = safeRead(sim, "assists")
+  if assists then
+    local nested = interpretAssistValue(assists[name]) or interpretAssistValue(assists[name:lower()])
+    if nested ~= nil then return nested end
+  end
+
+  return nil
+end
 
 local function resolveAssistState(car, physics, fields)
   return readAssistFields(car, fields)
       or readAssistFields(safeRead(car, "electronics"), fields)
       or readAssistFields(physics, fields)
-      or false
+      or resolveAssistFromSim(fields == absFields and "abs" or "tc")
+      or nil
 end
 
 local function interpretSpeedUnitValue(value)
@@ -495,8 +522,11 @@ function script.update(dt)
     if ok then physics = ph end
   end
 
-  absEnabled = resolveAssistState(car, physics, absFields)
-  tcEnabled  = resolveAssistState(car, physics, tcFields)
+  local absState = resolveAssistState(car, physics, absFields)
+  if absState ~= nil then absEnabled = absState end
+
+  local tcState = resolveAssistState(car, physics, tcFields)
+  if tcState ~= nil then tcEnabled = tcState end
 
   local newMax = chooseMaxRpm(car, 0)
   if newMax then
@@ -538,8 +568,8 @@ local function drawAssistLabels(cardMin, scale)
   local absPos = vec2(center.x - radius - 38 * scale, y)
   local tcPos  = vec2(center.x + radius + 18 * scale, y)
 
-  drawAssistLabelText(absPos, "ABS", absEnabled, scale)
-  drawAssistLabelText(tcPos,  "TC",  tcEnabled,  scale)
+  drawAssistLabelText(absPos, "ABS", absEnabled == true, scale)
+  drawAssistLabelText(tcPos,  "TC",  tcEnabled == true,  scale)
 end
 
 local function drawLeftCluster(cardMin, scale)
