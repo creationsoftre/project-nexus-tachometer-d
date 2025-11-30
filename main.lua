@@ -23,6 +23,8 @@ local layout = {
   speedY = 160,
   speedW = 150,
   speedH = 115,
+  reverseBtn = { x = 150, y = 14, w = 104, h = 38 },
+  assist = { x = 270, y = 14, w = 90, h = 38, spacing = 10 },
 }
 
 local dial = {
@@ -40,7 +42,9 @@ local settings = {
   position = nil,
   dragActive = false,
   dragOffset = nil,
-  useMph = false,
+  useMph = nil,
+  speedPrefResolved = false,
+  reverseManual = false,
 }
 
 
@@ -52,6 +56,13 @@ local theme = {
   speedBorder= rgbm(1.0, 1.0, 1.0, 0.9),
   gearText   = rgbm(1.00, 0.75, 0.30, 1.0),
   labelText  = rgbm(0.90, 0.90, 0.90, 0.95),
+  reverseIdle= rgbm(0.12, 0.12, 0.12, 0.88),
+  reverseHot = rgbm(0.95, 0.34, 0.20, 1.0),
+  reverseBorder = rgbm(1.0, 1.0, 1.0, 0.5),
+  assistOn   = rgbm(0.28, 0.80, 0.98, 1.0),
+  assistOff  = rgbm(0.12, 0.12, 0.12, 0.88),
+  assistTextOff = rgbm(0.80, 0.80, 0.80, 0.9),
+  assistBorder = rgbm(1.0, 1.0, 1.0, 0.4),
   tachOuter  = rgbm(0.03, 0.03, 0.03, 0.92),
   tachInner  = rgbm(0.01, 0.01, 0.01, 0.96),
   ringDim    = rgbm(1.0, 1.0, 1.0, 0.12),
@@ -67,6 +78,8 @@ local theme = {
 local carRPM      = 0
 local carSpeedKmh = 0
 local carGear     = 0
+local absEnabled  = false
+local tcEnabled   = false
 
 local defaultMaxRpm = dial.maxValue * 1000
 local minAllowedMax = 4000
@@ -105,7 +118,12 @@ local function angleForRatio(ratio)
 end
 
 local function getSpeedDisplay()
-  if settings.useMph then
+  local useMph = settings.useMph
+  if useMph == nil then
+    useMph = true
+  end
+
+  if useMph then
     return math.floor(carSpeedKmh * 0.621371 + 0.5), "mph"
   end
   return math.floor(carSpeedKmh + 0.5), "km/h"
@@ -217,6 +235,171 @@ local function currentMaxRpm()
   return defaultMaxRpm
 end
 
+local function interpretAssistValue(value)
+  if value == nil then return nil end
+  local t = type(value)
+  if t == "boolean" then return value end
+  if t == "number" then
+    if value > 0 then return true end
+    if value == 0 then return false end
+  end
+  if t == "string" then
+    local lower = value:lower()
+    if lower == "on" or lower == "enabled" or lower == "true" or lower == "1" or lower == "yes" then
+      return true
+    end
+    if lower == "off" or lower == "disabled" or lower == "false" or lower == "0" or lower == "no" then
+      return false
+    end
+  end
+  if t == "table" then
+    local keys = { "enabled", "active", "isOn", "on", "value", "state" }
+    for _, key in ipairs(keys) do
+      local nested = value[key]
+      local interpreted = interpretAssistValue(nested)
+      if interpreted ~= nil then
+        return interpreted
+      end
+    end
+  end
+  return nil
+end
+
+local function readAssistFields(source, fields)
+  if not source then return nil end
+  for _, field in ipairs(fields) do
+    local candidate = safeRead(source, field)
+    local interpreted = interpretAssistValue(candidate)
+    if interpreted ~= nil then
+      return interpreted
+    end
+  end
+  return nil
+end
+
+local absFields = { "abs", "absEnabled", "isAbsEnabled", "absOn", "absActive", "absState", "antiLock", "antilock", "antiLockBrakes", "antiLockBraking" }
+local tcFields  = { "tc", "tcEnabled", "isTcEnabled", "tcOn", "tcActive", "tcState", "tractionControl", "tractionControlEnabled", "tractionControlActive" }
+
+local function resolveAssistState(car, physics, fields)
+  return readAssistFields(car, fields)
+      or readAssistFields(safeRead(car, "electronics"), fields)
+      or readAssistFields(physics, fields)
+      or false
+end
+
+local function interpretSpeedUnitValue(value)
+  local t = type(value)
+  if t == "boolean" then
+    return value
+  end
+
+  if t == "number" then
+    if value < 0.5 then return false end
+    if value > 0.5 then return true end
+  end
+
+  if t == "string" then
+    local lower = value:lower()
+    if lower == "1" or lower == "true" or lower == "mph" or lower == "mi/h" or lower == "miles" or lower == "imperial" then
+      return true
+    end
+    if lower == "0" or lower == "false" or lower == "kmh" or lower == "km/h" or lower == "km" then
+      return false
+    end
+  end
+
+  if t == "table" then
+    local keys = { "speedUnits", "unitsSpeed", "speedUnit", "unit", "unitSystem" }
+    for _, key in ipairs(keys) do
+      local nested = value[key]
+      local interpreted = interpretSpeedUnitValue(nested)
+      if interpreted ~= nil then
+        return interpreted
+      end
+    end
+  end
+
+  return nil
+end
+
+local function detectSpeedUnitsFromIni()
+  local folderId = safeRead(ac, "FolderID")
+  local getFolder = safeRead(ac, "getFolder")
+  local loader = ac and ac.INIConfig and ac.INIConfig.load
+  if not folderId or not getFolder or not loader then return nil end
+
+  local documentsId = safeRead(folderId, "Documents") or safeRead(folderId, "Root")
+  if not documentsId then return nil end
+
+  local base = getFolder(documentsId)
+  if not base then return nil end
+
+  local paths = {
+    base .. "\\cfg\\assetto_corsa.ini",
+    base .. "\\system\\cfg\\assetto_corsa.ini",
+  }
+
+  local sections = { "BASIC", "SETTINGS", "OPTIONS" }
+  local keys = { "UNITS", "UNIT", "UNIT_SYSTEM", "SPEED_UNIT" }
+
+  for _, path in ipairs(paths) do
+    local ok, cfg = pcall(loader, path)
+    if ok and cfg then
+      for _, section in ipairs(sections) do
+        for _, key in ipairs(keys) do
+          local value = nil
+          local got, result = pcall(function() return cfg:get(section, key) end)
+          if got then value = result end
+          local interpreted = interpretSpeedUnitValue(value)
+          if interpreted ~= nil then
+            return interpreted
+          end
+        end
+      end
+    end
+  end
+
+  return nil
+end
+
+local function detectSpeedUnitsFromCsp()
+  local candidates = {
+    function()
+      if not ac or not ac.getSettings then return nil end
+      return ac.getSettings()
+    end,
+    function()
+      if not ac or not ac.getSim then return nil end
+      return ac.getSim()
+    end,
+  }
+
+  for _, getter in ipairs(candidates) do
+    local ok, value = pcall(getter)
+    if ok then
+      local interpreted = interpretSpeedUnitValue(value)
+      if interpreted ~= nil then
+        return interpreted
+      end
+    end
+  end
+
+  return nil
+end
+
+local function resolveSpeedPreference()
+  return detectSpeedUnitsFromCsp() or detectSpeedUnitsFromIni()
+end
+
+local function ensureSpeedPreference()
+  if settings.useMph ~= nil then return end
+  if settings.speedPrefResolved then return end
+
+  local preferred = resolveSpeedPreference()
+  settings.useMph = (preferred ~= nil) and preferred or true
+  settings.speedPrefResolved = true
+end
+
 local function clampPosition(pos, win, size)
   local maxX = math.max(0, win.x - size.x)
   local maxY = math.max(0, win.y - size.y)
@@ -304,12 +487,23 @@ local function drawSpeedToggle(cardMin, cardSize)
 end
 
 function script.update(dt)
+  ensureSpeedPreference()
+
   local car = ac.getCar(0)
   if not car then return end
 
   carRPM      = car.rpm or 0
   carSpeedKmh = car.speedKmh or 0
   carGear     = car.gear or 0
+
+  local physics = nil
+  if ac and ac.getCarPhysics then
+    local ok, ph = pcall(ac.getCarPhysics, 0)
+    if ok then physics = ph end
+  end
+
+  absEnabled = resolveAssistState(car, physics, absFields)
+  tcEnabled  = resolveAssistState(car, physics, tcFields)
 
   local newMax = chooseMaxRpm(car, 0)
   if newMax then
@@ -322,6 +516,99 @@ end
 ------------------------------------------------------------
 -- Left cluster (gear + speed)
 ------------------------------------------------------------
+
+local function isReverseActive()
+  if carGear < 0 then
+    return true
+  end
+  if carGear == 0 and settings.reverseManual then
+    return true
+  end
+  return false
+end
+
+local function gearDisplayText()
+  if isReverseActive() then
+    return "R"
+  end
+  if carGear == 0 then
+    return "N"
+  end
+  return tostring(carGear)
+end
+
+local function drawReverseButton(cardMin, scale)
+  local cfg = layout.reverseBtn
+  local btnMin = rel(cardMin, scale, cfg.x, cfg.y)
+  local btnMax = btnMin + vec2(cfg.w * scale, cfg.h * scale)
+
+  local mouse = ui.mousePos()
+  local hovered = pointInRect(mouse, btnMin, btnMax)
+  local active = isReverseActive()
+
+  local bg = active and theme.reverseHot or theme.reverseIdle
+  if hovered then
+    bg = rgbm(bg.r, bg.g, bg.b, math.min(1.0, bg.a + 0.12))
+  end
+
+  local rounding = cfg.h * scale / 2
+  ui.drawRectFilled(btnMin, btnMax, bg, rounding)
+  ui.drawRect(btnMin, btnMax, theme.reverseBorder, 2.0, rounding)
+
+  local label = active and "REVERSE" or "REV"
+  local textSize = 16 * scale
+  local text = ui.measureDWriteText(label, textSize)
+  local textPos = vec2(
+    btnMin.x + (cfg.w * scale - text.x) / 2,
+    btnMin.y + (cfg.h * scale - text.y) / 2
+  )
+  local textColor = active and rgbm(0.06, 0.06, 0.06, 1.0) or theme.labelText
+  ui.dwriteDrawText(label, textSize, textPos, textColor)
+
+  if hovered and ui.mouseClicked(0) then
+    if carGear < 0 then
+      settings.reverseManual = false
+    else
+      settings.reverseManual = not settings.reverseManual
+    end
+  end
+end
+
+local function drawAssistBadge(cardMin, scale, label, active, index)
+  local cfg = layout.assist
+  local x = cfg.x + (cfg.w + cfg.spacing) * index
+  local btnMin = rel(cardMin, scale, x, cfg.y)
+  local btnMax = btnMin + vec2(cfg.w * scale, cfg.h * scale)
+  local rounding = cfg.h * scale / 2
+
+  local bg = active and theme.assistOn or theme.assistOff
+  ui.drawRectFilled(btnMin, btnMax, bg, rounding)
+  ui.drawRect(btnMin, btnMax, theme.assistBorder, 2.0, rounding)
+
+  local textSize = 15 * scale
+  local text = ui.measureDWriteText(label, textSize)
+  local textPos = vec2(
+    btnMin.x + (cfg.w * scale - text.x) / 2,
+    btnMin.y + (cfg.h * scale - text.y) / 2 - 2 * scale
+  )
+  local textColor = active and rgbm(0.06, 0.06, 0.06, 1.0) or theme.assistTextOff
+  ui.dwriteDrawText(label, textSize, textPos, textColor)
+
+  local stateLabel = active and "ON" or "OFF"
+  local stateSize = 11 * scale
+  local state = ui.measureDWriteText(stateLabel, stateSize)
+  local statePos = vec2(
+    btnMin.x + (cfg.w * scale - state.x) / 2,
+    btnMin.y + (cfg.h * scale - state.y) / 2 + 10 * scale
+  )
+  local stateColor = active and rgbm(0.06, 0.06, 0.06, 0.8) or rgbm(0.95, 0.38, 0.30, 0.9)
+  ui.dwriteDrawText(stateLabel, stateSize, statePos, stateColor)
+end
+
+local function drawAssistRow(cardMin, scale)
+  drawAssistBadge(cardMin, scale, "ABS", absEnabled, 0)
+  drawAssistBadge(cardMin, scale, "TC", tcEnabled, 1)
+end
 
 local function drawLeftCluster(cardMin, scale)
   local gearMin = rel(cardMin, scale, layout.leftX, layout.gearY)
@@ -336,7 +623,7 @@ local function drawLeftCluster(cardMin, scale)
     rgbm(0.20, 0.20, 0.20, 0.18)
   )
 
-  local gearText = (carGear <= 0) and "N" or tostring(carGear)
+  local gearText = gearDisplayText()
   local gearSize = 74 * scale
   local gearPos  = gearMin + vec2(10 * scale, -6 * scale)
   ui.dwriteDrawText(gearText, gearSize, gearPos, theme.gearText)
@@ -363,6 +650,9 @@ local function drawLeftCluster(cardMin, scale)
   local unitSize = 18 * scale
   local unitPos  = vec2(speedMin.x + 18 * scale, speedMax.y - 28 * scale)
   ui.dwriteDrawText(speedLabel, unitSize, unitPos, theme.labelText)
+
+  drawReverseButton(cardMin, scale)
+  drawAssistRow(cardMin, scale)
 end
 
 ------------------------------------------------------------
@@ -376,6 +666,8 @@ local function drawTicks(center, radius)
 
   local stepRpm = 1000 / subdivisions
   local totalSteps = math.max(1, math.ceil(maxRpm / stepRpm))
+  local warnBand = clamp(maxRpm * 0.18, 1200, 2400)
+  local hotBand  = clamp(maxRpm * 0.12, 900, 1600)
 
   local function formatTickLabel(value)
     -- Force whole-number labels to avoid decimals like 8.2 on the tach face
@@ -396,8 +688,10 @@ local function drawTicks(center, radius)
     local thickness = isMajor and 3.0 or 1.4
 
     local color = theme.ticks
-    if rpmValue >= maxRpm - 1200 then
-      color = (rpmValue >= maxRpm - 300) and theme.tickHot or theme.tickWarn
+    if rpmValue >= maxRpm - hotBand then
+      color = theme.tickHot
+    elseif rpmValue >= maxRpm - warnBand then
+      color = theme.tickWarn
     end
 
     ui.drawLine(
@@ -521,6 +815,8 @@ end
 ------------------------------------------------------------
 
 function script.drawUI(dt)
+  ensureSpeedPreference()
+
   local win = ui.windowSize()
   local scale = SCALE
   local cardSize = vec2(layout.cardW * scale, layout.cardH * scale)
