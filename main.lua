@@ -23,7 +23,6 @@ local layout = {
   speedY = 160,
   speedW = 150,
   speedH = 115,
-  assist = { x = 150, y = 14, w = 94, h = 38, spacing = 12 },
 }
 
 local dial = {
@@ -54,9 +53,9 @@ local theme = {
   speedBorder= rgbm(1.0, 1.0, 1.0, 0.9),
   gearText   = rgbm(1.00, 0.75, 0.30, 1.0),
   labelText  = rgbm(0.90, 0.90, 0.90, 0.95),
-  assistBg      = rgbm(0.16, 0.16, 0.16, 0.92),
   assistTextOn  = rgbm(0.24, 0.62, 0.95, 1.0),
-  assistTextOff = rgbm(0.95, 0.34, 0.26, 1.0),
+  assistGlow    = rgbm(0.24, 0.62, 0.95, 0.45),
+  assistTextOff = rgbm(0.62, 0.62, 0.62, 0.9),
   tachOuter  = rgbm(0.03, 0.03, 0.03, 0.92),
   tachInner  = rgbm(0.01, 0.01, 0.01, 0.96),
   ringDim    = rgbm(1.0, 1.0, 1.0, 0.12),
@@ -521,38 +520,26 @@ local function gearDisplayText()
   return tostring(carGear)
 end
 
-local function drawAssistBadge(cardMin, scale, label, active, index)
-  local cfg = layout.assist
-  local x = cfg.x + (cfg.w + cfg.spacing) * index
-  local btnMin = rel(cardMin, scale, x, cfg.y)
-  local btnMax = btnMin + vec2(cfg.w * scale, cfg.h * scale)
-  local rounding = cfg.h * scale / 2
-
-  ui.drawRectFilled(btnMin, btnMax, theme.assistBg, rounding)
-
-  local textSize = 15 * scale
-  local text = ui.measureDWriteText(label, textSize)
-  local textPos = vec2(
-    btnMin.x + (cfg.w * scale - text.x) / 2,
-    btnMin.y + (cfg.h * scale - text.y) / 2 - 2 * scale
-  )
-  local textColor = active and theme.assistTextOn or theme.assistTextOff
-  ui.dwriteDrawText(label, textSize, textPos, textColor)
-
-  local stateLabel = active and "ON" or "OFF"
-  local stateSize = 11 * scale
-  local state = ui.measureDWriteText(stateLabel, stateSize)
-  local statePos = vec2(
-    btnMin.x + (cfg.w * scale - state.x) / 2,
-    btnMin.y + (cfg.h * scale - state.y) / 2 + 10 * scale
-  )
-  local stateColor = active and theme.assistTextOn or theme.assistTextOff
-  ui.dwriteDrawText(stateLabel, stateSize, statePos, stateColor)
+local function drawAssistLabelText(pos, label, active, scale)
+  local size = 18 * scale
+  if active then
+    local glow = theme.assistGlow
+    ui.dwriteDrawText(label, size, vec2(pos.x + 1.2 * scale, pos.y + 1.2 * scale), glow)
+  end
+  local color = active and theme.assistTextOn or theme.assistTextOff
+  ui.dwriteDrawText(label, size, pos, color)
 end
 
-local function drawAssistRow(cardMin, scale)
-  drawAssistBadge(cardMin, scale, "ABS", absEnabled, 0)
-  drawAssistBadge(cardMin, scale, "TC", tcEnabled, 1)
+local function drawAssistLabels(cardMin, scale)
+  local center = rel(cardMin, scale, layout.tachCenter.x, layout.tachCenter.y)
+  local radius = layout.tachRadius * scale
+  local y = center.y - radius * 0.4
+
+  local absPos = vec2(center.x - radius - 38 * scale, y)
+  local tcPos  = vec2(center.x + radius + 18 * scale, y)
+
+  drawAssistLabelText(absPos, "ABS", absEnabled, scale)
+  drawAssistLabelText(tcPos,  "TC",  tcEnabled,  scale)
 end
 
 local function drawLeftCluster(cardMin, scale)
@@ -596,7 +583,7 @@ local function drawLeftCluster(cardMin, scale)
   local unitPos  = vec2(speedMin.x + 18 * scale, speedMax.y - 28 * scale)
   ui.dwriteDrawText(speedLabel, unitSize, unitPos, theme.labelText)
 
-  drawAssistRow(cardMin, scale)
+  drawAssistLabels(cardMin, scale)
 end
 
 ------------------------------------------------------------
