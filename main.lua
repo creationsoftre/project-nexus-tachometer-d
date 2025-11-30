@@ -23,8 +23,7 @@ local layout = {
   speedY = 160,
   speedW = 150,
   speedH = 115,
-  reverseBtn = { x = 150, y = 14, w = 104, h = 38 },
-  assist = { x = 270, y = 14, w = 90, h = 38, spacing = 10 },
+  assist = { x = 150, y = 14, w = 94, h = 38, spacing = 12 },
 }
 
 local dial = {
@@ -44,7 +43,6 @@ local settings = {
   dragOffset = nil,
   useMph = nil,
   speedPrefResolved = false,
-  reverseManual = false,
 }
 
 
@@ -56,13 +54,10 @@ local theme = {
   speedBorder= rgbm(1.0, 1.0, 1.0, 0.9),
   gearText   = rgbm(1.00, 0.75, 0.30, 1.0),
   labelText  = rgbm(0.90, 0.90, 0.90, 0.95),
-  reverseIdle= rgbm(0.12, 0.12, 0.12, 0.88),
-  reverseHot = rgbm(0.95, 0.34, 0.20, 1.0),
-  reverseBorder = rgbm(1.0, 1.0, 1.0, 0.5),
-  assistOn   = rgbm(0.28, 0.80, 0.98, 1.0),
-  assistOff  = rgbm(0.12, 0.12, 0.12, 0.88),
-  assistTextOff = rgbm(0.80, 0.80, 0.80, 0.9),
-  assistBorder = rgbm(1.0, 1.0, 1.0, 0.4),
+  assistOn   = rgbm(0.24, 0.62, 0.95, 1.0),
+  assistOff  = rgbm(0.90, 0.26, 0.20, 1.0),
+  assistTextOn  = rgbm(0.06, 0.08, 0.10, 0.95),
+  assistTextOff = rgbm(1.00, 0.95, 0.92, 0.95),
   tachOuter  = rgbm(0.03, 0.03, 0.03, 0.92),
   tachInner  = rgbm(0.01, 0.01, 0.01, 0.96),
   ringDim    = rgbm(1.0, 1.0, 1.0, 0.12),
@@ -517,61 +512,14 @@ end
 -- Left cluster (gear + speed)
 ------------------------------------------------------------
 
-local function isReverseActive()
-  if carGear < 0 then
-    return true
-  end
-  if carGear == 0 and settings.reverseManual then
-    return true
-  end
-  return false
-end
-
 local function gearDisplayText()
-  if isReverseActive() then
+  if carGear < 0 then
     return "R"
   end
   if carGear == 0 then
     return "N"
   end
   return tostring(carGear)
-end
-
-local function drawReverseButton(cardMin, scale)
-  local cfg = layout.reverseBtn
-  local btnMin = rel(cardMin, scale, cfg.x, cfg.y)
-  local btnMax = btnMin + vec2(cfg.w * scale, cfg.h * scale)
-
-  local mouse = ui.mousePos()
-  local hovered = pointInRect(mouse, btnMin, btnMax)
-  local active = isReverseActive()
-
-  local bg = active and theme.reverseHot or theme.reverseIdle
-  if hovered then
-    bg = rgbm(bg.r, bg.g, bg.b, math.min(1.0, bg.a + 0.12))
-  end
-
-  local rounding = cfg.h * scale / 2
-  ui.drawRectFilled(btnMin, btnMax, bg, rounding)
-  ui.drawRect(btnMin, btnMax, theme.reverseBorder, 2.0, rounding)
-
-  local label = active and "REVERSE" or "REV"
-  local textSize = 16 * scale
-  local text = ui.measureDWriteText(label, textSize)
-  local textPos = vec2(
-    btnMin.x + (cfg.w * scale - text.x) / 2,
-    btnMin.y + (cfg.h * scale - text.y) / 2
-  )
-  local textColor = active and rgbm(0.06, 0.06, 0.06, 1.0) or theme.labelText
-  ui.dwriteDrawText(label, textSize, textPos, textColor)
-
-  if hovered and ui.mouseClicked(0) then
-    if carGear < 0 then
-      settings.reverseManual = false
-    else
-      settings.reverseManual = not settings.reverseManual
-    end
-  end
 end
 
 local function drawAssistBadge(cardMin, scale, label, active, index)
@@ -583,7 +531,6 @@ local function drawAssistBadge(cardMin, scale, label, active, index)
 
   local bg = active and theme.assistOn or theme.assistOff
   ui.drawRectFilled(btnMin, btnMax, bg, rounding)
-  ui.drawRect(btnMin, btnMax, theme.assistBorder, 2.0, rounding)
 
   local textSize = 15 * scale
   local text = ui.measureDWriteText(label, textSize)
@@ -591,7 +538,7 @@ local function drawAssistBadge(cardMin, scale, label, active, index)
     btnMin.x + (cfg.w * scale - text.x) / 2,
     btnMin.y + (cfg.h * scale - text.y) / 2 - 2 * scale
   )
-  local textColor = active and rgbm(0.06, 0.06, 0.06, 1.0) or theme.assistTextOff
+  local textColor = active and theme.assistTextOn or theme.assistTextOff
   ui.dwriteDrawText(label, textSize, textPos, textColor)
 
   local stateLabel = active and "ON" or "OFF"
@@ -601,7 +548,7 @@ local function drawAssistBadge(cardMin, scale, label, active, index)
     btnMin.x + (cfg.w * scale - state.x) / 2,
     btnMin.y + (cfg.h * scale - state.y) / 2 + 10 * scale
   )
-  local stateColor = active and rgbm(0.06, 0.06, 0.06, 0.8) or rgbm(0.95, 0.38, 0.30, 0.9)
+  local stateColor = active and theme.assistTextOn or theme.assistTextOff
   ui.dwriteDrawText(stateLabel, stateSize, statePos, stateColor)
 end
 
@@ -651,7 +598,6 @@ local function drawLeftCluster(cardMin, scale)
   local unitPos  = vec2(speedMin.x + 18 * scale, speedMax.y - 28 * scale)
   ui.dwriteDrawText(speedLabel, unitSize, unitPos, theme.labelText)
 
-  drawReverseButton(cardMin, scale)
   drawAssistRow(cardMin, scale)
 end
 
