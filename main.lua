@@ -1,9 +1,10 @@
 ------------------------------------------------------------
--- Project Nexus Tachometer HUD (CSS-to-Lua conversion) NEW
 -- Pure Lua resource that mirrors ui/index.html + style.css
 ------------------------------------------------------------
 
-local SCALE    = 1.0
+local DEFAULT_SCALE = 1.0
+local MIN_SCALE     = 0.65
+local MAX_SCALE     = 1.6
 local MARGIN_X = 36
 local MARGIN_Y = 36
 
@@ -40,6 +41,10 @@ local settings = {
   position = nil,
   dragActive = false,
   dragOffset = nil,
+  resizeActive = false,
+  resizeStartMouse = nil,
+  resizeStartScale = DEFAULT_SCALE,
+  scale = DEFAULT_SCALE,
   useMph = nil,
   speedPrefResolved = false,
 }
@@ -87,6 +92,19 @@ local function clamp(v, mn, mx)
   if v < mn then return mn end
   if v > mx then return mx end
   return v
+end
+
+local function clampScale(value)
+  return clamp(value or DEFAULT_SCALE, MIN_SCALE, MAX_SCALE)
+end
+
+local function setScale(value)
+  settings.scale = clampScale(value)
+  return settings.scale
+end
+
+local function getScale()
+  return setScale(settings.scale or DEFAULT_SCALE)
 end
 
 local function drawRectFilled(min, max, col, rounding)
@@ -457,17 +475,62 @@ local function drawMoveHandle(win, cardMin, cardSize)
   ui.drawLine(vec2(handle.x, handle.y - 6), vec2(handle.x, handle.y + 6), rgbm(1, 1, 1, 0.4), 1.4)
 
   local mouse = ui.mousePos()
-  if pointInCircle(mouse, handle, radius) and ui.mouseClicked(0) then
+  if pointInCircle(mouse, handle, radius) and ui.mouseClicked(0) and not settings.resizeActive then
     settings.dragActive = true
     settings.dragOffset = vec2(mouse.x - cardMin.x, mouse.y - cardMin.y)
   end
 end
 
-local function drawSpeedToggle(cardMin, cardSize)
-  local pillSize = vec2(150, 34)
-  local pillMin = cardMin + vec2(8, -pillSize.y + 8)
-  pillMin.x = math.max(pillMin.x, 12)
-  pillMin.y = math.max(pillMin.y, 30)
+local function drawResizeHandle(win, cardMin, cardSize)
+  local size = 26
+  local padding = 8
+  local handleMin = cardMin + vec2(cardSize.x - size - padding, cardSize.y - size - padding)
+  local handleMax = cardMin + vec2(cardSize.x - padding, cardSize.y - padding)
+  local mouse = ui.mousePos()
+  local hovered = pointInRect(mouse, handleMin, handleMax)
+
+  local fill = rgbm(0, 0, 0, hovered and 0.58 or 0.50)
+  local border = rgbm(1, 1, 1, hovered and 0.40 or 0.26)
+  drawRectFilled(handleMin, handleMax, fill, 6)
+  drawRectStroke(handleMin, handleMax, border, 1.2, 6)
+
+  local inset = 6
+  ui.drawLine(
+    vec2(handleMin.x + inset, handleMax.y - inset),
+    vec2(handleMax.x - inset, handleMin.y + inset),
+    border,
+    1.4
+  )
+  ui.drawLine(
+    vec2(handleMin.x + inset + 5, handleMax.y - inset),
+    vec2(handleMax.x - inset, handleMin.y + inset + 5),
+    border,
+    1.0
+  )
+
+  if settings.resizeActive and ui.mouseDown(0) then
+    local delta = mouse - settings.resizeStartMouse
+    local baseSize = vec2(layout.cardW, layout.cardH)
+    local deltaScale = (delta.x / baseSize.x + delta.y / baseSize.y) * 0.5
+    local newScale = clampScale(settings.resizeStartScale + deltaScale)
+    setScale(newScale)
+
+    local newCardSize = vec2(layout.cardW * newScale, layout.cardH * newScale)
+    settings.position = clampPosition(settings.position or vec2(0, 0), win, newCardSize)
+  elseif settings.resizeActive and not ui.mouseDown(0) then
+    settings.resizeActive = false
+  elseif hovered and ui.mouseClicked(0) and not settings.dragActive then
+    settings.resizeActive = true
+    settings.resizeStartMouse = mouse
+    settings.resizeStartScale = getScale()
+  end
+end
+
+local function drawSpeedToggle(cardMin, cardSize, scale)
+  local pillSize = vec2(150 * scale, 34 * scale)
+  local pillMin = cardMin + vec2(8 * scale, -pillSize.y + 8 * scale)
+  pillMin.x = math.max(pillMin.x, 12 * scale)
+  pillMin.y = math.max(pillMin.y, 30 * scale)
   local pillMax = pillMin + pillSize
   local mouse = ui.mousePos()
   local hovered = pointInRect(mouse, pillMin, pillMax)
@@ -482,16 +545,18 @@ local function drawSpeedToggle(cardMin, cardSize)
   local inactiveText = rgbm(1, 1, 1, 0.65)
   local activeText = rgbm(0.05, 0.05, 0.05, 1)
 
+  local inset = 3 * scale
   if not settings.useMph then
-    ui.drawRectFilled(vec2(leftBounds.min.x + 3, leftBounds.min.y + 3), vec2(leftBounds.max.x - 3, leftBounds.max.y - 3), highlight, pillSize.y / 2 - 3)
+    ui.drawRectFilled(vec2(leftBounds.min.x + inset, leftBounds.min.y + inset), vec2(leftBounds.max.x - inset, leftBounds.max.y - inset), highlight, pillSize.y / 2 - inset)
   else
-    ui.drawRectFilled(vec2(rightBounds.min.x + 3, rightBounds.min.y + 3), vec2(rightBounds.max.x - 3, rightBounds.max.y - 3), highlight, pillSize.y / 2 - 3)
+    ui.drawRectFilled(vec2(rightBounds.min.x + inset, rightBounds.min.y + inset), vec2(rightBounds.max.x - inset, rightBounds.max.y - inset), highlight, pillSize.y / 2 - inset)
   end
 
   local function centerText(bounds, text, color)
-    local measure = ui.measureDWriteText(text, 14)
+    local size = 14 * scale
+    local measure = ui.measureDWriteText(text, size)
     local pos = vec2(bounds.min.x + (bounds.max.x - bounds.min.x - measure.x) / 2, bounds.min.y + (pillSize.y - measure.y) / 2)
-    ui.dwriteDrawText(text, 14, pos, color)
+    ui.dwriteDrawText(text, size, pos, color)
   end
 
   centerText(leftBounds, "km/h", settings.useMph and inactiveText or activeText)
@@ -620,7 +685,7 @@ end
 -- Tachometer face (ticks, labels, needle)
 ------------------------------------------------------------
 
-local function drawTicks(center, radius)
+local function drawTicks(center, radius, scale)
   local subdivisions = dial.subdivisions
   local maxRpm = currentMaxRpm()
   if maxRpm <= 0 then return end
@@ -666,7 +731,7 @@ local function drawTicks(center, radius)
       local label = formatTickLabel(rpmValue / 1000)
       if label ~= lastLabel then
         lastLabel = label
-        local labelSize = 18 * SCALE
+        local labelSize = 18 * scale
         local labelPos = vec2(
           center.x + c * (radius * 0.60),
           center.y + s * (radius * 0.60)
@@ -750,7 +815,7 @@ local function drawTach(cardMin, scale)
 
   drawDialBase(center, radius)
   drawDialHighlight(center, radius)
-  drawTicks(center, radius)
+  drawTicks(center, radius, scale)
 
   -- draw hub first so needle renders on top of center circle
   ui.drawCircleFilled(center, radius * 0.11, theme.hubOuter)
@@ -779,13 +844,14 @@ function script.drawUI(dt)
   ensureSpeedPreference()
 
   local win = ui.windowSize()
-  local scale = SCALE
+  local scale = getScale()
   local cardSize = vec2(layout.cardW * scale, layout.cardH * scale)
 
   local cardMin = resolveCardMin(win, cardSize)
 
   drawMoveHandle(win, cardMin, cardSize)
-  drawSpeedToggle(cardMin, cardSize)
+  drawSpeedToggle(cardMin, cardSize, scale)
+  drawResizeHandle(win, cardMin, cardSize)
 
   drawLeftCluster(cardMin, scale)
   drawTach(cardMin, scale)
